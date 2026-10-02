@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Flow Log</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+    <style>
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="app-page">
+    <div id="app-nav" class="no-print"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="main-card p-4">
+          <div class="mb-4 no-print">
+            <h4 class="mb-0 text-muted fw-bold">Flow Log</h4>
+          </div>
+
+          <div class="row g-2 mb-3 no-print">
+            <div class="col-md-3">
+              <select id="filterFlow" class="form-select form-select-sm">
+                <option value="">All flows</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <input type="text" id="filterNumber" class="form-control form-control-sm" placeholder="Number contains…" />
+            </div>
+            <div class="col-md-2">
+              <input type="date" id="filterFrom" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+              <input type="date" id="filterTo" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-3 d-flex gap-1">
+              <button id="applyFilters" class="btn btn-sm btn-primary flex-fill">
+                <i class="fa fa-filter"></i> Filter
+              </button>
+              <button id="clearFilters" class="btn btn-sm btn-outline-secondary">
+                <i class="fa fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-2 no-print">
+            <div id="pager" class="small text-muted"></div>
+            <div class="d-flex gap-1">
+              <button id="exportCsvBtn" class="btn btn-sm btn-outline-success">
+                <i class="fa fa-file-csv"></i> Export CSV
+              </button>
+              <button id="exportPdfBtn" class="btn btn-sm btn-outline-secondary">
+                <i class="fa fa-file-pdf"></i> Export PDF
+              </button>
+            </div>
+          </div>
+
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Number</th>
+                <th>Flow</th>
+                <th>Session</th>
+                <th>Status</th>
+                <th>Steps</th>
+                <th>Duration</th>
+                <th>Answers</th>
+                <th>Completed</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody id="logRows"></tbody>
+          </table>
+
+          <div id="pagerBottom" class="d-flex justify-content-center gap-2 no-print"></div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- Step-by-step trace: what was sent/received at each node, and for an
+         API Call node the exact request payload + response body. -->
+    <div class="modal fade" id="traceModal" tabindex="-1">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Conversation trace</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="traceModalBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      const PAGE_SIZE = 20;
+      let currentPage = 0;
+      let lastEntries = [];
+
+      const STATUS_META = {
+        completed: { label: "Completed", cls: "bg-success" },
+        abandoned_retries: { label: "Abandoned (bad replies)", cls: "bg-warning text-dark" },
+        ai_failed: { label: "AI node failed", cls: "bg-danger" },
+        api_failed: { label: "API call failed", cls: "bg-danger" },
+      };
+
+      function formatStatus(status) {
+        const meta = STATUS_META[status] || { label: status || "Completed", cls: "bg-success" };
+        return `<span class="badge ${meta.cls}">${meta.label}</span>`;
+      }
+
+      function formatDuration(startedAt, completedAt) {
+        if (!startedAt || !completedAt) return '<span class="text-muted">-</span>';
+        const ms = completedAt - startedAt;
+        if (ms < 1000) return "<1s";
+        const totalSec = Math.round(ms / 1000);
+        if (totalSec < 60) return `${totalSec}s`;
+        const min = Math.floor(totalSec / 60);
+        const sec = totalSec % 60;
+        if (min < 60) return `${min}m ${sec}s`;
+        const hr = Math.floor(min / 60);
+        return `${hr}h ${min % 60}m`;
+      }
+
+      function formatAnswers(answers) {
+        return Object.entries(answers || {})
+          .map(([k, v]) => {
+            if (v && typeof v === "object" && v.path) {
+              // A downloaded photo/document/voice-note answer.
+              return `<b>${k}:</b> [${v.type}] ${v.path.split("/").pop()}`;
+            }
+            if (v && typeof v === "object") {
+              // An API Call node's saved response, or any other structured value.
+              return `<b>${k}:</b> ${JSON.stringify(v)}`;
+            }
+            return `<b>${k}:</b> ${v}`;
+          })
+          .join("<br>");
+      }
+
+      const NODE_TYPE_ICON = { message: "fa-comment", menu: "fa-list", question: "fa-circle-question", ai: "fa-robot", api: "fa-cloud", end: "fa-flag-checkered" };
+
+      function esc(s) {
+        return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      function pre(obj) {
+        return `<pre class="bg-light border rounded p-2 small mb-0" style="white-space: pre-wrap; word-break: break-word;">${esc(typeof obj === "string" ? obj : JSON.stringify(obj, null, 2))}</pre>`;
+      }
+
+      function formatTraceStep(step, idx) {
+        const icon = NODE_TYPE_ICON[step.type] || "fa-circle";
+        const rows = [];
+
+        if (step.type === "api") {
+          rows.push(`<div class="small fw-bold mt-2">Request</div>${pre(step.request)}`);
+          rows.push(`<div class="small fw-bold mt-2">Response</div>${pre(step.response)}`);
+          if (step.output) rows.push(`<div class="small fw-bold mt-2">Sent to contact</div>${pre(step.output)}`);
+        } else {
+          if (step.input) rows.push(`<div class="small fw-bold mt-2">Received from contact</div>${pre(step.input)}`);
+          if (step.media) rows.push(`<div class="small fw-bold mt-2">Media attached</div>${pre(`[${step.media.type}] ${(step.media.path || "").split("/").pop()}${step.media.mimetype ? " (" + step.media.mimetype + ")" : ""}`)}`);
+          if (step.aiExtracted) rows.push(`<div class="small fw-bold mt-2">AI-extracted fields</div>${pre(step.aiExtracted)}`);
+          if (step.savedAs) rows.push(`<div class="small fw-bold mt-2">Saved as</div>${pre(Array.isArray(step.savedAs) ? step.savedAs.join(", ") : step.savedAs)}`);
+          if (step.matchedOption !== undefined) rows.push(`<div class="small fw-bold mt-2">Menu choice</div>${pre(step.matchedOption === null ? "(no match" + (step.retries ? `, retry ${step.retries}` : "") + ")" : step.matchedOption)}`);
+          if (step.output) rows.push(`<div class="small fw-bold mt-2">Sent to contact</div>${pre(step.output)}`);
+        }
+        if (step.error) rows.push(`<div class="small fw-bold mt-2 text-danger">Error</div>${pre(step.error)}`);
+
+        return `
+          <div class="border rounded p-3 mb-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <div><i class="fa ${icon} me-2"></i><b>Step ${idx + 1}</b> &middot; node <code>${esc(step.nodeId)}</code> &middot; ${esc(step.type)}</div>
+              <div class="small text-muted">${step.at ? new Date(step.at).toLocaleTimeString() : ""}</div>
+            </div>
+            ${rows.join("")}
+          </div>
+        `;
+      }
+
+      function openTrace(entry) {
+        const trace = entry.trace || [];
+        const body = trace.length
+          ? trace.map(formatTraceStep).join("")
+          : '<p class="text-muted small">No step-by-step trace was recorded for this conversation (it completed before this feature was added).</p>';
+        $("#traceModalBody").html(body);
+        new bootstrap.Modal(document.getElementById("traceModal")).show();
+      }
+
+      function buildQuery(page) {
+        const params = new URLSearchParams();
+        const flowName = $("#filterFlow").val();
+        const number = $("#filterNumber").val().trim();
+        const from = $("#filterFrom").val();
+        const to = $("#filterTo").val();
+        if (flowName) params.set("flowName", flowName);
+        if (number) params.set("number", number);
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        params.set("page", page);
+        params.set("pageSize", PAGE_SIZE);
+        return params.toString();
+      }
+
+      function loadLog(page) {
+        currentPage = page;
+        fetch(`/api/flow-log?${buildQuery(page)}`)
+          .then((res) => res.json())
+          .then(({ entries, total }) => {
+            lastEntries = entries;
+            if (!entries.length) {
+              $("#logRows").html('<tr><td colspan="9" class="text-muted small">No completed conversations found.</td></tr>');
+            } else {
+              const html = entries
+                .map(
+                  (e, idx) => `
+                <tr>
+                  <td>${e.number}</td>
+                  <td>${e.flowName}</td>
+                  <td class="small text-muted">${e.sessionId || "-"}</td>
+                  <td>${formatStatus(e.status)}</td>
+                  <td class="text-center">${e.steps ?? "-"}</td>
+                  <td>${formatDuration(e.startedAt, e.completedAt)}</td>
+                  <td>${formatAnswers(e.answers) || '<span class="text-muted">-</span>'}</td>
+                  <td>${new Date(e.completedAt).toLocaleString()}</td>
+                  <td class="no-print"><button class="btn btn-sm btn-outline-secondary viewTraceBtn" data-idx="${idx}"><i class="fa fa-list-ol"></i> Trace</button></td>
+                </tr>
+              `,
+                )
+                .join("");
+              $("#logRows").html(html);
+            }
+            renderPager(total, page);
+          });
+      }
+
+      function renderPager(total, page) {
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const text = `Page ${page + 1} of ${totalPages} (${total} total)`;
+        $("#pager").text(text);
+        $("#pagerBottom").html(`
+          <button class="btn btn-sm btn-outline-secondary" ${page <= 0 ? "disabled" : ""} id="prevPage"><i class="fa fa-chevron-left"></i> Prev</button>
+          <button class="btn btn-sm btn-outline-secondary" ${page + 1 >= totalPages ? "disabled" : ""} id="nextPage">Next <i class="fa fa-chevron-right"></i></button>
+        `);
+        $("#prevPage").on("click", () => loadLog(Math.max(0, page - 1)));
+        $("#nextPage").on("click", () => loadLog(page + 1));
+      }
+
+      function loadFlowFilterOptions() {
+        fetch("/api/flows")
+          .then((res) => res.json())
+          .then((flows) => {
+            const names = [...new Set(flows.map((f) => f.name))];
+            names.forEach((n) => $("#filterFlow").append(`<option value="${n}">${n}</option>`));
+          })
+          .catch(() => {});
+      }
+
+      $(document).on("click", ".viewTraceBtn", function () {
+        const entry = lastEntries[$(this).data("idx")];
+        if (entry) openTrace(entry);
+      });
+
+      $("#applyFilters").on("click", () => loadLog(0));
+      $("#clearFilters").on("click", () => {
+        $("#filterFlow").val("");
+        $("#filterNumber").val("");
+        $("#filterFrom").val("");
+        $("#filterTo").val("");
+        loadLog(0);
+      });
+
+      function csvEscape(value) {
+        const s = String(value ?? "");
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }
+
+      $("#exportCsvBtn").on("click", function () {
+        fetch(`/api/flow-log?${buildQuery(0)}&pageSize=2000`)
+          .then((res) => res.json())
+          .then(({ entries }) => {
+            const answerKeys = [...new Set(entries.flatMap((e) => Object.keys(e.answers || {})))];
+            const header = ["number", "flowName", "sessionId", "status", "steps", "durationSec", "startedAt", "completedAt", ...answerKeys];
+            const lines = [header.join(",")];
+            entries.forEach((e) => {
+              const row = [
+                csvEscape(e.number),
+                csvEscape(e.flowName),
+                csvEscape(e.sessionId || ""),
+                csvEscape(e.status || "completed"),
+                csvEscape(e.steps ?? ""),
+                csvEscape(e.startedAt ? Math.round((e.completedAt - e.startedAt) / 1000) : ""),
+                csvEscape(e.startedAt ? new Date(e.startedAt).toISOString() : ""),
+                csvEscape(new Date(e.completedAt).toISOString()),
+                ...answerKeys.map((k) => {
+                  const v = e.answers?.[k];
+                  if (v && typeof v === "object" && v.path) return csvEscape(`[${v.type}] ${v.path}`);
+                  return csvEscape(v && typeof v === "object" ? JSON.stringify(v) : v || "");
+                }),
+              ];
+              lines.push(row.join(","));
+            });
+            const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `flow-log-${Date.now()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          });
+      });
+
+      // No PDF library - the browser's native print-to-PDF on the
+      // already-filtered table is simpler and needs no new dependency.
+      $("#exportPdfBtn").on("click", function () {
+        window.print();
+      });
+
+      loadFlowFilterOptions();
+      loadLog(0);
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

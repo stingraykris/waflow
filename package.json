@@ -1,0 +1,32 @@
+{
+  "name": "waflow",
+  "version": "1.0.0",
+  "description": "WAFLOW - WhatsApp bulk sender, chatbot flows and API built on Baileys",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.71.1",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.3.1",
+    "express-session": "^1.18.0",
+    "ioredis": "^5.10.1",
+    "multer": "^2.1.1",
+    "pino": "^9.5.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.7.5",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  }
+}

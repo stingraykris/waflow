@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Verify Numbers</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-12 main-card p-4">
+          <div class="text-start">
+            <h4 class="mb-0 text-muted fw-bold">Verify Numbers</h4>
+            <div class="d-flex gap-2">
+              <span class="text-muted small">Session:</span>
+              <span id="session-id" class="text-dark"
+                >Connecting...</span
+              >
+            </div>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-md-6">
+              <label class="form-label fw-bold"
+                ><i class="fa fa-list me-2"></i>Phone Number List</label
+              >
+              <textarea
+                name="phone"
+                id="phone"
+                class="form-control mb-3"
+                placeholder="Enter numbers (one per line)..."
+                rows="12"
+                required
+              ></textarea>
+
+              <div class="d-grid">
+                <button
+                  id="SendMessage"
+                  class="btn btn-primary btn-lg shadow-sm"
+                >
+                  <i class="fa fa-play-circle me-2"></i> Start Verify
+                </button>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-bold"
+                ><i class="fa fa-check-double me-2"></i>Verification
+                Results</label
+              >
+              <textarea
+                class="form-control"
+                id="pass"
+                name="pass"
+                rows="12"
+                readonly
+                placeholder="Status will appear here..."
+              ></textarea>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+      var socket = io();
+
+      socket.on("session-id", function (id) {
+        $("#session-id").text(id);
+      });
+
+      socket.on("verifyStatus", function (data) {
+        const symbol = data.status ? "✔" : "✖";
+        $("#pass").append(`${data.number} ${symbol}\n`);
+        // Auto-scroll to bottom
+        const textarea = document.getElementById("pass");
+        textarea.scrollTop = textarea.scrollHeight;
+      });
+
+      $("#SendMessage").on("click", function () {
+        const phoneData = $("#phone").val().trim();
+        if (!phoneData) return alert("Please enter numbers to verify");
+
+        $("#pass").empty();
+        const btn = $(this);
+        btn
+          .prop("disabled", true)
+          .html(
+            '<span class="spinner-border spinner-border-sm me-2"></span>Verifying...',
+          );
+
+        socket.emit(
+          "verify",
+          {
+            phone: phoneData,
+            cid: $("#session-id").text().trim(),
+          },
+          function (res) {
+            btn
+              .prop("disabled", false)
+              .html('<i class="fa fa-play-circle me-2"></i> Start Verify');
+            if (!res) return;
+            if (res.status === "session_not_ready") alert("Session not ready");
+            if (res.status === "unauthorized") alert("Unauthorized");
+          },
+        );
+      });
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

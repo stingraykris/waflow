@@ -1,0 +1,18 @@
+node_modules/
+.env
+logs/
+.baileys_auth/
+public/uploads/*
+!public/uploads/.gitkeep
+public/images/*
+!public/images/.gitkeep
+data/
+
+# Real accounts / allowlist (contain password hashes, API keys, IPs).
+# Copy the *.example.json files on a fresh install.
+users.json
+allowedIPs.json
+*.tmp
+
+# Local scratch scripts
+tmp-*.mjs

@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Flows</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/drawflow@0.0.59/dist/drawflow.min.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+    <style>
+      #drawflow {
+        position: relative;
+        width: 100%;
+        height: 65vh;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+      }
+      .drag-drawflow {
+        cursor: grab;
+        padding: 10px 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        background: #fff;
+        font-size: 0.9rem;
+      }
+      .drawflow .drawflow-node {
+        background: #fff;
+        border: 2px solid #adb5bd;
+        border-radius: 8px;
+        padding: 0;
+        min-width: 170px;
+      }
+      .drawflow .drawflow-node.node-menu { border-color: #0dcaf0; }
+      .drawflow .drawflow-node.node-question { border-color: #ffc107; }
+      .drawflow .drawflow-node.node-end { border-color: #dc3545; }
+      .drawflow .drawflow-node.node-message { border-color: #198754; }
+      .drawflow .drawflow-node.node-ai { border-color: #6f42c1; }
+      .drawflow .drawflow-node.node-api { border-color: #fd7e14; }
+      .drawflow .drawflow-node.start-node { box-shadow: 0 0 0 3px #198754; }
+      .node-body { padding: 8px 10px; }
+      .node-body .node-title { font-weight: 600; font-size: 0.85rem; }
+      .node-body .node-preview { font-size: 0.75rem; color: #6c757d; white-space: normal; word-break: break-word; }
+    </style>
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container-fluid">
+      <div class="row justify-content-center">
+        <div class="main-card p-4" style="max-width: 1400px">
+          <div class="mb-3">
+            <h4 class="mb-0 text-muted fw-bold">Flow Builder</h4>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <input type="text" id="flowName" class="form-control" placeholder="Flow name" />
+            </div>
+            <div class="col-md-5">
+              <input
+                type="text"
+                id="flowKeywords"
+                class="form-control"
+                placeholder="Trigger keywords, comma separated (blank = any first message)"
+              />
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+              <button id="newFlowBtn" class="btn btn-outline-secondary flex-fill">
+                <i class="fa fa-file me-1"></i> New
+              </button>
+              <button id="saveFlowBtn" class="btn btn-primary flex-fill">
+                <i class="fa fa-save me-1"></i> Save
+              </button>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-2">
+              <h6 class="fw-bold small">Drag onto canvas</h6>
+              <div class="drag-drawflow" draggable="true" data-node="message">
+                <i class="fa fa-comment text-success"></i> Message
+              </div>
+              <div class="drag-drawflow" draggable="true" data-node="menu">
+                <i class="fa fa-list text-info"></i> Menu
+              </div>
+              <div class="drag-drawflow" draggable="true" data-node="question">
+                <i class="fa fa-circle-question text-warning"></i> Question
+              </div>
+              <div class="drag-drawflow" draggable="true" data-node="end">
+                <i class="fa fa-flag-checkered text-danger"></i> End
+              </div>
+              <div class="drag-drawflow" draggable="true" data-node="ai">
+                <i class="fa fa-robot" style="color: #6f42c1"></i> AI Reply
+              </div>
+              <div class="drag-drawflow" draggable="true" data-node="api">
+                <i class="fa fa-cloud" style="color: #fd7e14"></i> API Call
+              </div>
+              <p class="small text-muted mt-3">
+                Click a node to edit it. The node with a green outline is
+                where the conversation starts.
+              </p>
+              <button id="resetStates" class="btn btn-sm btn-outline-warning w-100">
+                <i class="fa fa-broom me-1"></i> Reset stuck chats
+              </button>
+            </div>
+            <div class="col-md-7">
+              <div id="drawflow"></div>
+            </div>
+            <div class="col-md-3">
+              <h6 class="fw-bold small">Saved Flows</h6>
+              <div id="flowList" class="list-group"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- Node edit modal -->
+    <!-- No "fade" class: this modal gets opened/closed rapidly while
+         editing nodes, and Bootstrap's fade transition creates a race
+         where a fast show()-after-hide() can leak an orphaned
+         .modal-backdrop that then blocks all canvas interaction. -->
+    <div class="modal" id="nodeModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit <span id="modalNodeType"></span> node</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3 field-text">
+              <label class="form-label small fw-bold">Text</label>
+              <textarea id="modalText" class="form-control" rows="4"></textarea>
+            </div>
+
+            <div class="mb-3 field-ai d-none">
+              <label class="form-label small fw-bold">AI Provider</label>
+              <select id="modalProvider" class="form-select mb-2"></select>
+              <div id="modalNoProviders" class="small text-muted d-none">
+                No AI providers configured yet - <a href="/integrations" target="_blank">add one in Integrations</a>.
+              </div>
+              <label class="form-label small fw-bold">System Prompt</label>
+              <textarea id="modalSystemPrompt" class="form-control" rows="4" placeholder="e.g. You are a friendly support agent for Acme Co. Keep replies short."></textarea>
+              <div class="form-text">
+                The contact's message is sent to the AI along with this prompt, and its reply is sent back. Point this node's output at itself to keep chatting, or elsewhere to hand off to the rest of the flow.
+              </div>
+            </div>
+
+            <div class="mb-3 field-saveas d-none">
+              <label class="form-label small fw-bold">Save answer as variable</label>
+              <input type="text" id="modalSaveAs" class="form-control" placeholder="e.g. name" />
+            </div>
+
+            <div class="form-check mb-3 field-acceptmedia d-none">
+              <input class="form-check-input" type="checkbox" id="modalAcceptMedia" />
+              <label class="form-check-label" for="modalAcceptMedia">
+                Accept a photo, document, or voice note as the answer instead of text
+              </label>
+            </div>
+
+            <div class="mb-3 field-audiomode d-none">
+              <label class="form-label small fw-bold">If a voice note is sent</label>
+              <select id="modalAudioMode" class="form-select">
+                <option value="transcribe">Transcribe to text (default)</option>
+                <option value="file">Keep as a file - skip transcription</option>
+              </select>
+              <div class="form-text">
+                "Keep as a file" saves the raw recording (as {saveAsName}) instead of converting it to text - use this to forward the audio itself to an API Call node via {saveAsName.base64}.
+              </div>
+            </div>
+
+            <div class="form-check mb-3 field-aiextract-toggle d-none">
+              <input class="form-check-input" type="checkbox" id="modalAiExtractEnabled" />
+              <label class="form-check-label" for="modalAiExtractEnabled">
+                Extract structured fields with AI instead of saving raw text
+              </label>
+            </div>
+
+            <div id="aiExtractEditor" class="mb-3 d-none">
+              <label class="form-label small fw-bold">AI Provider</label>
+              <select id="modalExtractProvider" class="form-select mb-2"></select>
+              <div id="modalExtractNoProviders" class="small text-muted d-none">
+                No AI providers configured yet - <a href="/integrations" target="_blank">add one in Integrations</a>.
+              </div>
+              <label class="form-label small fw-bold">Fields to extract</label>
+              <div id="extractFieldsList"></div>
+              <button type="button" id="addExtractFieldBtn" class="btn btn-sm btn-outline-secondary mt-1">
+                <i class="fa fa-plus"></i> Add field
+              </button>
+              <div class="form-text">
+                The contact's reply (typed or a transcribed voice note) is sent to the AI, which returns each field's value - saved into the flow's answers under that field's name (e.g. {customer_name}).
+              </div>
+            </div>
+
+            <div id="apiEditor" class="mb-3 d-none">
+              <div class="row g-2 mb-2">
+                <div class="col-3">
+                  <select id="modalApiMethod" class="form-select">
+                    <option>GET</option>
+                    <option>POST</option>
+                    <option>PUT</option>
+                    <option>PATCH</option>
+                    <option>DELETE</option>
+                  </select>
+                </div>
+                <div class="col-9">
+                  <input type="text" id="modalApiUrl" class="form-control" placeholder="https://your-crm.example.com/api/customers/{number}" />
+                </div>
+              </div>
+              <label class="form-label small fw-bold">Headers</label>
+              <div id="apiHeadersList"></div>
+              <button type="button" id="addApiHeaderBtn" class="btn btn-sm btn-outline-secondary mt-1 mb-2">
+                <i class="fa fa-plus"></i> Add header
+              </button>
+              <div class="field-api-body d-none">
+                <label class="form-label small fw-bold">Body (JSON, supports {answerKey})</label>
+                <textarea id="modalApiBody" class="form-control mb-2" rows="3" placeholder='{"name":"{customer_name}","phone":"{phone}"}'></textarea>
+              </div>
+              <label class="form-label small fw-bold">Reply to contact (optional)</label>
+              <textarea id="modalApiReplyTemplate" class="form-control mb-2" rows="2" placeholder="e.g. Your order status: {response.status}"></textarea>
+              <label class="form-label small fw-bold">Save response as variable (optional)</label>
+              <input type="text" id="modalApiSaveAs" class="form-control mb-2" placeholder="e.g. crmResult" />
+              <label class="form-label small fw-bold">If the call fails, send instead</label>
+              <input type="text" id="modalApiFailureMessage" class="form-control" placeholder="Sorry, something went wrong. Please try again later." />
+              <div class="form-text">
+                URL, header values, and body can reference {answerKey} from earlier questions, plus {number} - the contact's phone number, always available without asking for it. For a photo/document/voice-note answer, use {answerKey.base64} (and {answerKey.mimetype}) in the body to embed the file itself. The reply can additionally reference {response.field} from the API's JSON reply.
+              </div>
+            </div>
+
+            <div id="optionsEditor" class="mb-3 d-none">
+              <label class="form-label small fw-bold">Menu options (one output per option)</label>
+              <div id="optionsList"></div>
+              <button type="button" id="addOptionBtn" class="btn btn-sm btn-outline-secondary mt-1">
+                <i class="fa fa-plus"></i> Add option
+              </button>
+            </div>
+
+            <div class="mb-3 field-media">
+              <label class="form-label small fw-bold">Attach media (optional)</label>
+              <input type="file" id="modalMediaFile" class="form-control" />
+              <div id="modalMediaInfo" class="small text-muted mt-1">No media attached</div>
+            </div>
+
+            <button type="button" id="modalSetStart" class="btn btn-sm btn-outline-success">
+              <i class="fa fa-flag me-1"></i> Set as start node
+            </button>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-danger me-auto" id="modalDeleteNode">
+              <i class="fa fa-trash"></i> Delete node
+            </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="modalSaveNode">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/drawflow@0.0.59/dist/drawflow.min.js"></script>
+    <script>
+      const ICONS = { message: "fa-comment", menu: "fa-list", question: "fa-circle-question", end: "fa-flag-checkered", ai: "fa-robot", api: "fa-cloud" };
+      const PROVIDER_LABELS = { openai: "OpenAI", anthropic: "Anthropic", gemini: "Gemini", deepseek: "DeepSeek" };
+      let configuredProviders = [];
+
+      const container = document.getElementById("drawflow");
+      const editor = new Drawflow(container);
+      editor.reroute = true;
+      editor.start();
+
+      let startNodeId = null;
+      let currentFlowId = null;
+      let currentEditingNodeId = null;
+      let pendingMedia = null; // { path, filename, type } uploaded but not yet applied
+
+      // One Modal instance reused for the lifetime of the page. Creating a
+      // fresh `new bootstrap.Modal(...)` on every open/close cycle can leak
+      // a stray `.modal-backdrop` if a show/hide happens faster than the
+      // fade transition - that leftover backdrop then sits on top of the
+      // canvas and silently swallows every mouse event meant for Drawflow.
+      const nodeModal = new bootstrap.Modal(document.getElementById("nodeModal"));
+
+      function guessMediaType(filename) {
+        const ext = (filename.split(".").pop() || "").toLowerCase();
+        if (["jpg", "jpeg", "png", "webp"].includes(ext)) return "image";
+        if (["mp4", "mov"].includes(ext)) return "video";
+        return "document";
+      }
+
+      function nodeHtml(type, data) {
+        const preview = type === "ai"
+          ? (data.systemPrompt || "(no system prompt yet)").slice(0, 60)
+          : type === "api"
+          ? `${data.method || "GET"} ${(data.url || "(no URL yet)").slice(0, 50)}`
+          : (data.text || "(no text yet)").slice(0, 60);
+        const extra =
+          type === "menu" ? `${(data.options || []).length} option(s)` :
+          type === "question" && data.aiExtract?.fields?.length ? `AI-extracts ${data.aiExtract.fields.length} field(s)` :
+          type === "question" && data.acceptMedia && data.audioMode === "file" ? "accepts media (voice notes kept as file)" :
+          type === "question" && data.acceptMedia ? "accepts media" :
+          type === "ai" ? (data.provider ? `via ${PROVIDER_LABELS[data.provider] || data.provider}` : "no provider set") :
+          "";
+        return `<div class="node-body">
+          <div class="node-title"><i class="fa ${ICONS[type]}"></i> ${type}</div>
+          <div class="node-preview">${preview}</div>
+          ${extra ? `<div class="node-preview fst-italic">${extra}</div>` : ""}
+          ${data.media ? `<div class="node-preview"><i class="fa fa-paperclip"></i> ${data.media.filename || "media"}</div>` : ""}
+        </div>`;
+      }
+
+      function nodeDefaults(type) {
+        if (type === "menu") return { text: "", options: [{ label: "Option 1", value: "1" }] };
+        if (type === "question") return { text: "", saveAs: "", acceptMedia: false, audioMode: "transcribe", aiExtract: null };
+        if (type === "ai") return { systemPrompt: "", provider: "" };
+        if (type === "api") return { method: "GET", url: "", headers: [], body: "", replyTemplate: "", saveResponseAs: "", failureMessage: "" };
+        return { text: "" };
+      }
+
+      function markStart(id) {
+        document.querySelectorAll(".start-node").forEach((el) => el.classList.remove("start-node"));
+        startNodeId = id;
+        const el = document.getElementById(`node-${id}`);
+        if (el) el.classList.add("start-node");
+      }
+
+      function clientToCanvas(clientX, clientY) {
+        const rect = editor.precanvas.getBoundingClientRect();
+        const x = (clientX - rect.x) / editor.zoom;
+        const y = (clientY - rect.y) / editor.zoom;
+        return { x, y };
+      }
+
+      function addNodeToCanvas(type, clientX, clientY) {
+        const data = nodeDefaults(type);
+        const { x, y } = clientToCanvas(clientX, clientY);
+        const inputs = 1;
+        const outputs = type === "end" ? 0 : type === "menu" ? data.options.length : 1;
+        const id = editor.addNode(type, inputs, outputs, x, y, `node-${type}`, data, nodeHtml(type, data));
+        if (startNodeId === null) markStart(id);
+        return id;
+      }
+
+      document.querySelectorAll(".drag-drawflow").forEach((el) => {
+        el.addEventListener("dragstart", (ev) => {
+          ev.dataTransfer.setData("node-type", el.dataset.node);
+        });
+      });
+      container.addEventListener("dragover", (ev) => ev.preventDefault());
+      container.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        const type = ev.dataTransfer.getData("node-type");
+        if (type) addNodeToCanvas(type, ev.clientX, ev.clientY);
+      });
+
+      // Drawflow fires "nodeSelected" on mousedown - the same event that
+      // starts a drag-to-reposition gesture - so opening the edit modal
+      // from it makes nodes impossible to rearrange (every drag attempt
+      // immediately pops the modal). Instead, track mousedown/mouseup
+      // ourselves and only treat it as "click to edit" if the pointer
+      // barely moved, same distinction a browser makes for a native click
+      // vs. a drag.
+      const CLICK_MOVE_THRESHOLD = 5;
+      let mouseDownNodeId = null;
+      let mouseDownPos = null;
+
+      container.addEventListener("mousedown", (ev) => {
+        const portEl = ev.target.closest(".input, .output");
+        if (portEl) {
+          mouseDownNodeId = null; // connecting ports, not selecting a node
+          return;
+        }
+        const nodeEl = ev.target.closest(".drawflow-node");
+        mouseDownNodeId = nodeEl ? nodeEl.id.replace("node-", "") : null;
+        mouseDownPos = { x: ev.clientX, y: ev.clientY };
+      });
+
+      container.addEventListener("mouseup", (ev) => {
+        if (mouseDownNodeId === null) return;
+        const dx = Math.abs(ev.clientX - mouseDownPos.x);
+        const dy = Math.abs(ev.clientY - mouseDownPos.y);
+        if (dx <= CLICK_MOVE_THRESHOLD && dy <= CLICK_MOVE_THRESHOLD) {
+          openNodeModal(Number(mouseDownNodeId));
+        }
+        mouseDownNodeId = null;
+      });
+
+      function optionRowHtml(opt, idx) {
+        return `<div class="input-group input-group-sm mb-1 option-row" data-idx="${idx}">
+          <input type="text" class="form-control opt-label" placeholder="Label" value="${opt.label || ""}">
+          <input type="text" class="form-control opt-value" placeholder="Reply value e.g. 1" value="${opt.value || ""}">
+          <button class="btn btn-outline-danger remove-opt" type="button"><i class="fa fa-times"></i></button>
+        </div>`;
+      }
+
+      function renderOptionsEditor(options) {
+        $("#optionsList").html(options.map(optionRowHtml).join(""));
+      }
+
+      $(document).on("click", ".remove-opt", function () {
+        $(this).closest(".option-row").remove();
+      });
+
+      $("#addOptionBtn").on("click", function () {
+        const count = $("#optionsList .option-row").length + 1;
+        $("#optionsList").append(optionRowHtml({ label: `Option ${count}`, value: String(count) }, count - 1));
+      });
+
+      function collectOptions() {
+        return $("#optionsList .option-row")
+          .map(function () {
+            return { label: $(this).find(".opt-label").val().trim(), value: $(this).find(".opt-value").val().trim() };
+          })
+          .get()
+          .filter((o) => o.value);
+      }
+
+      function headerRowHtml(h) {
+        return `<div class="input-group input-group-sm mb-1 header-row">
+          <input type="text" class="form-control hdr-key" placeholder="Header, e.g. Authorization" value="${h.key || ""}">
+          <input type="text" class="form-control hdr-value" placeholder="Value, e.g. Bearer xyz123" value="${h.value || ""}">
+          <button class="btn btn-outline-danger remove-hdr" type="button"><i class="fa fa-times"></i></button>
+        </div>`;
+      }
+
+      function renderHeadersEditor(headers) {
+        $("#apiHeadersList").html((headers || []).map(headerRowHtml).join(""));
+      }
+
+      $(document).on("click", ".remove-hdr", function () {
+        $(this).closest(".header-row").remove();
+      });
+
+      $("#addApiHeaderBtn").on("click", function () {
+        $("#apiHeadersList").append(headerRowHtml({}));
+      });
+
+      function collectHeaders() {
+        return $("#apiHeadersList .header-row")
+          .map(function () {
+            return { key: $(this).find(".hdr-key").val().trim(), value: $(this).find(".hdr-value").val() };
+          })
+          .get()
+          .filter((h) => h.key);
+      }
+
+      $("#modalApiMethod").on("change", function () {
+        $(".field-api-body").toggleClass("d-none", ["GET", "DELETE"].includes(this.value));
+      });
+
+      function extractFieldRowHtml(f) {
+        return `<div class="input-group input-group-sm mb-1 extract-field-row">
+          <input type="text" class="form-control ef-name" placeholder="Field name, e.g. customer_name" value="${f.name || ""}">
+          <input type="text" class="form-control ef-desc" placeholder="What to look for, e.g. the customer's full name" value="${f.description || ""}">
+          <button class="btn btn-outline-danger remove-ef" type="button"><i class="fa fa-times"></i></button>
+        </div>`;
+      }
+
+      function renderExtractFieldsEditor(fields) {
+        $("#extractFieldsList").html((fields || []).map(extractFieldRowHtml).join(""));
+      }
+
+      $(document).on("click", ".remove-ef", function () {
+        $(this).closest(".extract-field-row").remove();
+      });
+
+      $("#addExtractFieldBtn").on("click", function () {
+        $("#extractFieldsList").append(extractFieldRowHtml({}));
+      });
+
+      function collectExtractFields() {
+        return $("#extractFieldsList .extract-field-row")
+          .map(function () {
+            return { name: $(this).find(".ef-name").val().trim(), description: $(this).find(".ef-desc").val().trim() };
+          })
+          .get()
+          .filter((f) => f.name);
+      }
+
+      function populateExtractProviderSelect(selected) {
+        if (!configuredProviders.length) {
+          $("#modalExtractProvider").addClass("d-none");
+          $("#modalExtractNoProviders").removeClass("d-none");
+          return;
+        }
+        $("#modalExtractProvider").removeClass("d-none");
+        $("#modalExtractNoProviders").addClass("d-none");
+        $("#modalExtractProvider").html(
+          configuredProviders.map((p) => `<option value="${p}" ${p === selected ? "selected" : ""}>${PROVIDER_LABELS[p] || p}</option>`).join(""),
+        );
+      }
+
+      function loadConfiguredProviders(selectedForPopulate) {
+        return fetch("/api/ai-settings")
+          .then((res) => res.json())
+          .then((data) => {
+            configuredProviders = Object.entries(data.providers)
+              .filter(([, v]) => v.configured)
+              .map(([k]) => k);
+            selectedForPopulate();
+          });
+      }
+
+      // Opening the node-edit modal happens mid-click (on Drawflow's own
+      // "nodeSelected" event, fired from its mousedown handler). The
+      // Bootstrap backdrop that appears immediately covers the canvas, so
+      // the matching mouseup never reaches Drawflow's container listener -
+      // its internal "currently dragging this node" state (drag/connection/
+      // ele_selected) is left stuck armed. The next mousedown anywhere on
+      // the canvas (even just to select another node) then gets treated as
+      // continuing that drag, teleporting the *previous* node to the new
+      // click position. Resetting Drawflow's own state fields directly
+      // sidesteps needing its mouseup handler to ever fire cleanly.
+      function forceDrawflowMouseUp() {
+        editor.drag = false;
+        editor.connection = false;
+        editor.ele_selected = null;
+        editor.node_selected = null;
+        document.querySelectorAll("#drawflow .drawflow-node.selected").forEach((el) => el.classList.remove("selected"));
+      }
+
+      function populateProviderSelect(selected) {
+        if (!configuredProviders.length) {
+          $("#modalProvider").addClass("d-none");
+          $("#modalNoProviders").removeClass("d-none");
+          return;
+        }
+        $("#modalProvider").removeClass("d-none");
+        $("#modalNoProviders").addClass("d-none");
+        $("#modalProvider").html(
+          configuredProviders.map((p) => `<option value="${p}" ${p === selected ? "selected" : ""}>${PROVIDER_LABELS[p] || p}</option>`).join(""),
+        );
+      }
+
+      function openNodeModal(id) {
+        forceDrawflowMouseUp();
+        const node = editor.getNodeFromId(id);
+        if (!node) return;
+        currentEditingNodeId = id;
+        pendingMedia = null;
+
+        $("#modalNodeType").text(node.name);
+        $("#modalText").val(node.data.text || "");
+        $("#modalMediaFile").val("");
+        $("#modalMediaInfo").text(node.data.media ? `Attached: ${node.data.media.filename}` : "No media attached");
+
+        $(".field-saveas, .field-acceptmedia, .field-audiomode, .field-ai, .field-aiextract-toggle, #aiExtractEditor, #apiEditor, #optionsEditor").addClass("d-none");
+        $(".field-text, .field-media").removeClass("d-none");
+
+        if (node.name === "question") {
+          $(".field-saveas, .field-acceptmedia, .field-aiextract-toggle").removeClass("d-none");
+          $("#modalSaveAs").val(node.data.saveAs || "");
+          $("#modalAcceptMedia").prop("checked", !!node.data.acceptMedia);
+          $("#modalAudioMode").val(node.data.audioMode || "transcribe");
+          $(".field-audiomode").toggleClass("d-none", !node.data.acceptMedia);
+
+          const aiExtractOn = !!node.data.aiExtract?.fields?.length;
+          $("#modalAiExtractEnabled").prop("checked", aiExtractOn);
+          $("#modalSaveAs").closest(".field-saveas").toggleClass("d-none", aiExtractOn);
+          $("#aiExtractEditor").toggleClass("d-none", !aiExtractOn);
+          renderExtractFieldsEditor(node.data.aiExtract?.fields || []);
+          loadConfiguredProviders(() => populateExtractProviderSelect(node.data.aiExtract?.provider));
+        }
+
+        if (node.name === "menu") {
+          $("#optionsEditor").removeClass("d-none");
+          renderOptionsEditor(node.data.options || []);
+        }
+
+        if (node.name === "ai") {
+          $(".field-text, .field-media").addClass("d-none");
+          $(".field-ai").removeClass("d-none");
+          $("#modalSystemPrompt").val(node.data.systemPrompt || "");
+          loadConfiguredProviders(() => populateProviderSelect(node.data.provider));
+        }
+
+        if (node.name === "api") {
+          $(".field-text, .field-media").addClass("d-none");
+          $("#apiEditor").removeClass("d-none");
+          $("#modalApiMethod").val(node.data.method || "GET").trigger("change");
+          $("#modalApiUrl").val(node.data.url || "");
+          renderHeadersEditor(node.data.headers || []);
+          $("#modalApiBody").val(node.data.body || "");
+          $("#modalApiReplyTemplate").val(node.data.replyTemplate || "");
+          $("#modalApiSaveAs").val(node.data.saveResponseAs || "");
+          $("#modalApiFailureMessage").val(node.data.failureMessage || "");
+        }
+
+        nodeModal.show();
+      }
+
+      $("#modalMediaFile").on("change", function () {
+        const file = this.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append("file", file);
+        $("#modalMediaInfo").text("Uploading...");
+        fetch("/api/flows/media", { method: "POST", body: formData })
+          .then((res) => res.json())
+          .then((data) => {
+            pendingMedia = { path: data.path, filename: data.filename, type: guessMediaType(data.filename) };
+            $("#modalMediaInfo").text(`Attached: ${data.filename}`);
+          })
+          .catch(() => $("#modalMediaInfo").text("Upload failed"));
+      });
+
+      $("#modalAiExtractEnabled").on("change", function () {
+        const on = $(this).is(":checked");
+        $("#modalSaveAs").closest(".field-saveas").toggleClass("d-none", on);
+        $("#aiExtractEditor").toggleClass("d-none", !on);
+      });
+
+      $("#modalAcceptMedia").on("change", function () {
+        $(".field-audiomode").toggleClass("d-none", !$(this).is(":checked"));
+      });
+
+      $("#modalSetStart").on("click", function () {
+        if (currentEditingNodeId !== null) markStart(currentEditingNodeId);
+      });
+
+      $("#modalDeleteNode").on("click", function () {
+        if (currentEditingNodeId === null) return;
+        editor.removeNodeId(`node-${currentEditingNodeId}`);
+        if (startNodeId === currentEditingNodeId) startNodeId = null;
+        forceDrawflowMouseUp();
+        nodeModal.hide();
+      });
+
+      $("#modalSaveNode").on("click", function () {
+        const id = currentEditingNodeId;
+        const node = editor.getNodeFromId(id);
+        if (!node) return;
+
+        const data = { ...node.data };
+        data.text = $("#modalText").val();
+
+        if (node.name === "question") {
+          data.saveAs = $("#modalSaveAs").val().trim();
+          data.acceptMedia = $("#modalAcceptMedia").is(":checked");
+          data.audioMode = $("#modalAudioMode").val() || "transcribe";
+          data.aiExtract = $("#modalAiExtractEnabled").is(":checked")
+            ? { provider: $("#modalExtractProvider").val() || "", fields: collectExtractFields() }
+            : null;
+        }
+
+        if (node.name === "menu") {
+          const options = collectOptions();
+          const currentOutputCount = Object.keys(editor.getNodeFromId(id).outputs).length;
+          const needed = Math.max(1, options.length);
+          for (let i = currentOutputCount; i < needed; i++) editor.addNodeOutput(id);
+          for (let i = currentOutputCount; i > needed; i--) editor.removeNodeOutput(id);
+          data.options = options;
+        }
+
+        if (node.name === "ai") {
+          data.systemPrompt = $("#modalSystemPrompt").val();
+          data.provider = $("#modalProvider").val() || "";
+        }
+
+        if (node.name === "api") {
+          data.method = $("#modalApiMethod").val();
+          data.url = $("#modalApiUrl").val().trim();
+          data.headers = collectHeaders();
+          data.body = $("#modalApiBody").val();
+          data.replyTemplate = $("#modalApiReplyTemplate").val();
+          data.saveResponseAs = $("#modalApiSaveAs").val().trim();
+          data.failureMessage = $("#modalApiFailureMessage").val().trim();
+        }
+
+        if (pendingMedia) data.media = pendingMedia;
+
+        editor.updateNodeDataFromId(id, data);
+        const el = document.querySelector(`#node-${id} .drawflow_content_node`);
+        if (el) el.innerHTML = nodeHtml(node.name, data);
+
+        forceDrawflowMouseUp();
+        nodeModal.hide();
+      });
+
+      // ---- Save / load flow ----
+
+      function validateFlow(flow) {
+        const errors = [];
+        if (!flow.startNodeId || !flow.nodes[flow.startNodeId]) {
+          errors.push("No start node set - click a node and choose \"Set as start node\".");
+        }
+        for (const [id, node] of Object.entries(flow.nodes)) {
+          if (node.type === "menu") {
+            if (!node.options?.length) errors.push(`Menu node ${id} has no options`);
+            node.options?.forEach((o, i) => {
+              if (!o.nextNodeId) errors.push(`Menu node ${id}, option ${i + 1} isn't connected to anything`);
+            });
+          }
+          if (node.type === "question" && !node.aiExtract?.fields?.length && !node.saveAs) {
+            errors.push(`Question node ${id} needs a "save answer as" variable name`);
+          }
+          if (node.type === "question" && node.aiExtract?.fields?.length && !node.aiExtract.provider) {
+            errors.push(`Question node ${id} has AI extraction enabled but no provider selected`);
+          }
+          if (node.type === "ai") {
+            if (!node.provider) errors.push(`AI node ${id} needs a provider selected`);
+            if (!node.systemPrompt) errors.push(`AI node ${id} needs a system prompt`);
+          }
+          if (node.type === "api") {
+            if (!node.url) errors.push(`API Call node ${id} needs a URL`);
+            const hasBody = node.body && !["GET", "DELETE"].includes(node.method);
+            if (hasBody) {
+              // Substitute {placeholder} tokens with a dummy value (same
+              // regex the server uses) and check what's left is valid JSON -
+              // catches typos like a stray "{" before it ever reaches the
+              // real API and gets silently rejected there instead.
+              const substituted = node.body.replace(/\{[a-zA-Z0-9_.]+\}/g, "x");
+              try {
+                JSON.parse(substituted);
+              } catch (err) {
+                errors.push(`API Call node ${id}'s body isn't valid JSON: ${err.message}`);
+              }
+            }
+          }
+        }
+        return errors;
+      }
+
+      function drawflowToFlow() {
+        const exported = editor.export();
+        const raw = exported.drawflow.Home.data;
+        const nodes = {};
+
+        for (const [id, n] of Object.entries(raw)) {
+          const type = n.name;
+          const base = { type, text: n.data.text || "", posX: n.pos_x, posY: n.pos_y };
+          if (n.data.media) base.media = n.data.media;
+
+          if (type === "menu") {
+            base.options = (n.data.options || []).map((opt, idx) => {
+              const conn = n.outputs?.[`output_${idx + 1}`]?.connections?.[0];
+              return { label: opt.label, value: opt.value, nextNodeId: conn ? String(conn.node) : undefined };
+            });
+          } else if (type === "question") {
+            base.saveAs = n.data.saveAs;
+            base.acceptMedia = !!n.data.acceptMedia;
+            base.audioMode = n.data.audioMode || "transcribe";
+            base.aiExtract = n.data.aiExtract || null;
+            const conn = n.outputs?.output_1?.connections?.[0];
+            base.nextNodeId = conn ? String(conn.node) : undefined;
+          } else if (type === "message") {
+            const conn = n.outputs?.output_1?.connections?.[0];
+            base.nextNodeId = conn ? String(conn.node) : undefined;
+          } else if (type === "ai") {
+            base.systemPrompt = n.data.systemPrompt || "";
+            base.provider = n.data.provider || "";
+            const conn = n.outputs?.output_1?.connections?.[0];
+            base.nextNodeId = conn ? String(conn.node) : undefined;
+          } else if (type === "api") {
+            base.method = n.data.method || "GET";
+            base.url = n.data.url || "";
+            base.headers = n.data.headers || [];
+            base.body = n.data.body || "";
+            base.replyTemplate = n.data.replyTemplate || "";
+            base.saveResponseAs = n.data.saveResponseAs || "";
+            base.failureMessage = n.data.failureMessage || "";
+            const conn = n.outputs?.output_1?.connections?.[0];
+            base.nextNodeId = conn ? String(conn.node) : undefined;
+          }
+
+          nodes[String(id)] = base;
+        }
+
+        return { startNodeId: startNodeId ? String(startNodeId) : null, nodes };
+      }
+
+      function flowToDrawflowImport(flow) {
+        const data = {};
+        const ids = Object.keys(flow.nodes);
+
+        ids.forEach((id, idx) => {
+          const node = flow.nodes[id];
+          const outputsCount = node.type === "end" ? 0 : node.type === "menu" ? Math.max(1, (node.options || []).length) : 1;
+          const outputs = {};
+          for (let i = 1; i <= outputsCount; i++) outputs[`output_${i}`] = { connections: [] };
+
+          data[id] = {
+            id,
+            name: node.type,
+            data: {
+              text: node.text,
+              options: node.options,
+              saveAs: node.saveAs,
+              acceptMedia: node.acceptMedia,
+              audioMode: node.audioMode,
+              aiExtract: node.aiExtract,
+              media: node.media,
+              systemPrompt: node.systemPrompt,
+              provider: node.provider,
+              method: node.method,
+              url: node.url,
+              headers: node.headers,
+              body: node.body,
+              replyTemplate: node.replyTemplate,
+              saveResponseAs: node.saveResponseAs,
+              failureMessage: node.failureMessage,
+            },
+            class: `node-${node.type}`,
+            html: nodeHtml(node.type, node),
+            typenode: false,
+            inputs: { input_1: { connections: [] } },
+            outputs,
+            pos_x: typeof node.posX === "number" ? node.posX : 60 + (idx % 4) * 260,
+            pos_y: typeof node.posY === "number" ? node.posY : 60 + Math.floor(idx / 4) * 180,
+          };
+        });
+
+        ids.forEach((id) => {
+          const node = flow.nodes[id];
+          if (node.type === "menu") {
+            (node.options || []).forEach((opt, i) => {
+              if (opt.nextNodeId && data[opt.nextNodeId]) {
+                data[id].outputs[`output_${i + 1}`].connections.push({ node: opt.nextNodeId, output: "input_1" });
+                data[opt.nextNodeId].inputs.input_1.connections.push({ node: id, input: `output_${i + 1}` });
+              }
+            });
+          } else if ((node.type === "message" || node.type === "question" || node.type === "ai" || node.type === "api") && node.nextNodeId && data[node.nextNodeId]) {
+            data[id].outputs.output_1.connections.push({ node: node.nextNodeId, output: "input_1" });
+            data[node.nextNodeId].inputs.input_1.connections.push({ node: id, input: "output_1" });
+          }
+        });
+
+        return { drawflow: { Home: { data } } };
+      }
+
+      $("#newFlowBtn").on("click", function () {
+        editor.clear();
+        startNodeId = null;
+        currentFlowId = null;
+        $("#flowName").val("");
+        $("#flowKeywords").val("");
+      });
+
+      $("#saveFlowBtn").on("click", function () {
+        const flow = drawflowToFlow();
+        const errors = validateFlow(flow);
+        if (errors.length) {
+          Swal.fire("Fix these first", errors.join("<br>"), "warning");
+          return;
+        }
+        const name = $("#flowName").val().trim();
+        if (!name) {
+          Swal.fire("Missing name", "Give this flow a name.", "warning");
+          return;
+        }
+        const triggerKeywords = $("#flowKeywords").val().split(",").map((k) => k.trim()).filter(Boolean);
+
+        const payload = { name, triggerKeywords, startNodeId: flow.startNodeId, nodes: flow.nodes };
+        const url = currentFlowId ? `/api/flows/${currentFlowId}` : "/api/flows";
+        const method = currentFlowId ? "PUT" : "POST";
+
+        fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+          .then((res) => res.json())
+          .then((flow) => {
+            currentFlowId = flow.id;
+            loadFlowList();
+            Swal.fire("Saved", "Flow saved. Activate it to make it live.", "success");
+          });
+      });
+
+      function loadFlowIntoEditor(flow) {
+        editor.clear();
+        editor.import(flowToDrawflowImport(flow));
+        startNodeId = flow.startNodeId;
+        markStart(flow.startNodeId);
+        currentFlowId = flow.id;
+        $("#flowName").val(flow.name);
+        $("#flowKeywords").val((flow.triggerKeywords || []).join(", "));
+      }
+
+      function loadFlowList() {
+        fetch("/api/flows")
+          .then((res) => res.json())
+          .then((flows) => {
+            if (!flows.length) {
+              $("#flowList").html('<div class="text-muted small">No flows yet.</div>');
+              return;
+            }
+            const html = flows
+              .map(
+                (f) => `
+              <div class="list-group-item">
+                <div class="fw-bold small">${f.name} ${f.isActive ? '<span class="badge bg-success">active</span>' : ""}</div>
+                <div class="small text-muted">${(f.triggerKeywords || []).length ? "triggers: " + f.triggerKeywords.join(", ") : "catch-all (any first message)"}</div>
+                <div class="d-flex gap-1 mt-1">
+                  <button class="btn btn-sm btn-outline-primary editFlow" data-id="${f.id}"><i class="fa fa-pen"></i></button>
+                  ${
+                    f.isActive
+                      ? `<button class="btn btn-sm btn-outline-secondary deactivateFlow" data-id="${f.id}"><i class="fa fa-pause"></i> Deactivate</button>`
+                      : `<button class="btn btn-sm btn-outline-success activateFlow" data-id="${f.id}"><i class="fa fa-play"></i> Activate</button>`
+                  }
+                  <button class="btn btn-sm btn-outline-danger delFlow" data-id="${f.id}"><i class="fa fa-trash"></i></button>
+                </div>
+              </div>
+            `,
+              )
+              .join("");
+            $("#flowList").html(html);
+          });
+      }
+
+      $(document).on("click", ".editFlow", function () {
+        fetch(`/api/flows/${$(this).data("id")}`)
+          .then((res) => res.json())
+          .then(loadFlowIntoEditor);
+      });
+
+      $(document).on("click", ".activateFlow", function () {
+        fetch(`/api/flows/${$(this).data("id")}/activate`, { method: "POST" })
+          .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || "Failed to activate");
+            loadFlowList();
+          })
+          .catch((err) => Swal.fire("Can't activate", err.message, "warning"));
+      });
+
+      $(document).on("click", ".deactivateFlow", function () {
+        fetch(`/api/flows/${$(this).data("id")}/deactivate`, { method: "POST" }).then(() => loadFlowList());
+      });
+
+      $(document).on("click", ".delFlow", function () {
+        fetch(`/api/flows/${$(this).data("id")}`, { method: "DELETE" }).then(() => loadFlowList());
+      });
+
+      $("#resetStates").on("click", function () {
+        fetch("/api/flows/reset-states", { method: "POST" })
+          .then((res) => res.json())
+          .then((data) => Swal.fire("Cleared", `${data.cleared} stuck conversation(s) reset.`, "success"));
+      });
+
+      loadFlowList();
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

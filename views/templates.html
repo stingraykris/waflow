@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Templates</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="main-card p-4">
+          <div class="mb-4">
+            <h4 class="mb-0 text-muted fw-bold">Templates</h4>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-md-5">
+              <h6 class="fw-bold">New Template</h6>
+              <div class="mb-2">
+                <input
+                  type="text"
+                  id="tplName"
+                  class="form-control"
+                  placeholder="Template name"
+                />
+              </div>
+              <div class="mb-2">
+                <textarea
+                  id="tplBody"
+                  class="form-control"
+                  rows="8"
+                  placeholder="Message body. Use {column} for CSV variables."
+                ></textarea>
+              </div>
+              <button id="saveTpl" class="btn btn-primary">
+                <i class="fa fa-save me-1"></i> Save Template
+              </button>
+            </div>
+            <div class="col-md-7">
+              <h6 class="fw-bold">Saved Templates</h6>
+              <div id="tplList" class="list-group"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+      function loadTemplates() {
+        fetch("/api/templates")
+          .then((res) => res.json())
+          .then((templates) => {
+            if (!templates.length) {
+              $("#tplList").html(
+                '<div class="text-muted small">No templates yet.</div>',
+              );
+              return;
+            }
+            const html = templates
+              .map(
+                (t) => `
+              <div class="list-group-item d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="fw-bold">${t.name}</div>
+                  <div class="small text-muted" style="white-space: pre-wrap">${t.body}</div>
+                </div>
+                <button class="btn btn-sm btn-outline-danger delTpl" data-id="${t.id}">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
+            `,
+              )
+              .join("");
+            $("#tplList").html(html);
+          });
+      }
+
+      $("#saveTpl").on("click", function () {
+        const name = $("#tplName").val().trim();
+        const body = $("#tplBody").val().trim();
+        if (!name || !body) {
+          Swal.fire("Missing fields", "Name and body are required.", "warning");
+          return;
+        }
+        fetch("/api/templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, body }),
+        })
+          .then((res) => res.json())
+          .then(() => {
+            $("#tplName").val("");
+            $("#tplBody").val("");
+            loadTemplates();
+          });
+      });
+
+      $(document).on("click", ".delTpl", function () {
+        const id = $(this).data("id");
+        fetch(`/api/templates/${id}`, { method: "DELETE" }).then(() =>
+          loadTemplates(),
+        );
+      });
+
+      loadTemplates();
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

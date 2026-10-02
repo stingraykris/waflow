@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Integrations</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="main-card p-4">
+          <div class="mb-4">
+            <h4 class="mb-0 text-muted fw-bold">Integrations</h4>
+          </div>
+
+          <h6 class="fw-bold mb-3"><i class="fa fa-robot me-2"></i>AI Providers</h6>
+          <p class="text-muted small">
+            Your own API keys, used only for your account's flows (AI Reply
+            nodes and voice-note transcription). Never shared with other
+            accounts, never sent anywhere except the provider itself.
+          </p>
+          <div id="providerList" class="row g-3 mb-4"></div>
+
+          <hr class="my-4" />
+
+          <h6 class="fw-bold mb-3"><i class="fa fa-satellite-dish me-2"></i>Webhooks</h6>
+          <p class="text-muted small">
+            POST a JSON payload to this URL when a message arrives, a flow
+            completes, or a delivery status changes.
+          </p>
+          <div class="row g-2 mb-2">
+            <div class="col-md-8">
+              <input type="text" id="webhookUrl" class="form-control" placeholder="https://your-server.com/webhook" />
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+              <button id="saveWebhook" class="btn btn-primary flex-fill">Save</button>
+              <button id="testWebhook" class="btn btn-outline-secondary flex-fill">Test</button>
+            </div>
+          </div>
+          <div class="d-flex gap-4 mt-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="evtMessage" />
+              <label class="form-check-label small" for="evtMessage">Message received</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="evtFlow" />
+              <label class="form-check-label small" for="evtFlow">Flow completed</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="evtDelivery" />
+              <label class="form-check-label small" for="evtDelivery">Delivery status</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+      const PROVIDER_META = {
+        openai: {
+          label: "OpenAI",
+          icon: "fa-brain",
+          modelHint: "e.g. gpt-4o-mini (cheaper) or gpt-4o (more capable, pricier)",
+        },
+        anthropic: {
+          label: "Anthropic (Claude)",
+          icon: "fa-a",
+          modelHint: "e.g. claude-haiku-4-5-20251001 (cheaper) or claude-sonnet-5 (more capable, pricier)",
+        },
+        gemini: {
+          label: "Google Gemini",
+          icon: "fa-star",
+          modelHint: "e.g. gemini-3.1-flash-lite (free-tier friendly) or gemini-3.5-flash (more capable, paid)",
+        },
+        deepseek: {
+          label: "DeepSeek",
+          icon: "fa-magnifying-glass",
+          modelHint: "e.g. deepseek-chat (default) or deepseek-reasoner",
+        },
+      };
+
+      function loadProviders() {
+        fetch("/api/ai-settings")
+          .then((res) => res.json())
+          .then((data) => {
+            const html = Object.entries(PROVIDER_META)
+              .map(([id, meta]) => {
+                const p = data.providers[id] || { configured: false };
+                return `
+                <div class="col-md-6">
+                  <div class="border rounded p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <span class="fw-bold"><i class="fa ${meta.icon} me-2"></i>${meta.label}</span>
+                      ${p.configured ? '<span class="badge bg-success">Connected</span>' : '<span class="badge bg-secondary">Not connected</span>'}
+                    </div>
+                    ${p.configured ? `<div class="small text-muted mb-2">Key: ${p.masked}</div>` : ""}
+                    <div class="input-group input-group-sm mb-2">
+                      <input type="password" class="form-control providerKeyInput" data-provider="${id}" placeholder="${p.configured ? "Replace key…" : "Paste API key…"}" />
+                      <button class="btn btn-outline-primary saveProviderBtn" data-provider="${id}"><i class="fa fa-save"></i></button>
+                      ${p.configured ? `<button class="btn btn-outline-danger removeProviderBtn" data-provider="${id}"><i class="fa fa-trash"></i></button>` : ""}
+                    </div>
+                    <label class="form-label small fw-bold mb-1">Model</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control providerModelInput" data-provider="${id}" value="${p.model || ""}" placeholder="model name" />
+                      ${p.configured ? `<button class="btn btn-outline-secondary saveModelBtn" data-provider="${id}"><i class="fa fa-rotate"></i></button>` : ""}
+                    </div>
+                    <div class="form-text">${meta.modelHint}</div>
+                  </div>
+                </div>
+              `;
+              })
+              .join("");
+            $("#providerList").html(html);
+          });
+      }
+
+      $(document).on("click", ".saveProviderBtn", function () {
+        const provider = $(this).data("provider");
+        const apiKey = $(`.providerKeyInput[data-provider="${provider}"]`).val().trim();
+        const model = $(`.providerModelInput[data-provider="${provider}"]`).val().trim();
+        if (!apiKey) {
+          Swal.fire("Missing key", "Paste an API key first.", "warning");
+          return;
+        }
+        fetch("/api/ai-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, apiKey, model: model || undefined }),
+        })
+          .then((res) => res.json())
+          .then(() => {
+            Swal.fire({ icon: "success", title: "Saved", toast: true, position: "top-end", showConfirmButton: false, timer: 1800 });
+            loadProviders();
+          });
+      });
+
+      $(document).on("click", ".saveModelBtn", function () {
+        const provider = $(this).data("provider");
+        const model = $(`.providerModelInput[data-provider="${provider}"]`).val().trim();
+        if (!model) {
+          Swal.fire("Missing model", "Type a model name first.", "warning");
+          return;
+        }
+        fetch(`/api/ai-settings/${provider}/model`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model }),
+        })
+          .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || "Failed to update model");
+            Swal.fire({ icon: "success", title: "Model updated", toast: true, position: "top-end", showConfirmButton: false, timer: 1800 });
+            loadProviders();
+          })
+          .catch((err) => Swal.fire("Can't update model", err.message, "warning"));
+      });
+
+      $(document).on("click", ".removeProviderBtn", function () {
+        const provider = $(this).data("provider");
+        fetch(`/api/ai-settings/${provider}`, { method: "DELETE" }).then(() => loadProviders());
+      });
+
+      function loadWebhook() {
+        fetch("/api/webhooks")
+          .then((res) => res.json())
+          .then((config) => {
+            $("#webhookUrl").val(config.url || "");
+            $("#evtMessage").prop("checked", !!config.events.messageReceived);
+            $("#evtFlow").prop("checked", !!config.events.flowCompleted);
+            $("#evtDelivery").prop("checked", !!config.events.deliveryStatus);
+          });
+      }
+
+      $("#saveWebhook").on("click", function () {
+        const payload = {
+          url: $("#webhookUrl").val().trim(),
+          events: {
+            messageReceived: $("#evtMessage").is(":checked"),
+            flowCompleted: $("#evtFlow").is(":checked"),
+            deliveryStatus: $("#evtDelivery").is(":checked"),
+          },
+        };
+        fetch("/api/webhooks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then((res) => res.json())
+          .then(() => Swal.fire({ icon: "success", title: "Saved", toast: true, position: "top-end", showConfirmButton: false, timer: 1800 }));
+      });
+
+      $("#testWebhook").on("click", function () {
+        fetch("/api/webhooks/test", { method: "POST" })
+          .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || "Failed");
+            Swal.fire("Test sent", `Responded with HTTP ${data.httpStatus} in ${data.ms}ms`, data.status === "ok" ? "success" : "warning");
+          })
+          .catch((err) => Swal.fire("Test failed", err.message, "error"));
+      });
+
+      loadProviders();
+      loadWebhook();
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

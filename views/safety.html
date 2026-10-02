@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Safety</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+    <style>
+      .health-green { color: #198754; }
+      .health-yellow { color: #ffc107; }
+      .health-red { color: #dc3545; }
+      .health-unknown { color: #6c757d; }
+    </style>
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="main-card p-4">
+          <div class="mb-3">
+            <h4 class="mb-0 text-muted fw-bold">Safety</h4>
+          </div>
+
+          <div class="alert alert-warning small">
+            <b>This does not guarantee your account won't be banned.</b>
+            WhatsApp automation via Baileys (like whatsapp-web.js, WAHA, and
+            similar tools) is unofficial - it isn't covered by Meta's Terms
+            of Service, and detection is probabilistic. Even long-established
+            accounts have been banned with no warning. These limits, warm-up
+            ramp, and reply-health tracking are based on community-tested
+            practices to reduce risk, not eliminate it. The biggest real
+            risk factor is a low reply ratio (messaging people who don't
+            respond) - keep an eye on the health score below.
+          </div>
+
+          <div id="sessionsContainer"></div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+      function healthClass(ratio) {
+        if (ratio === null) return "health-unknown";
+        if (ratio >= 0.3) return "health-green";
+        if (ratio >= 0.1) return "health-yellow";
+        return "health-red";
+      }
+
+      function healthLabel(ratio) {
+        if (ratio === null) return "No data yet";
+        return `${Math.round(ratio * 100)}% reply rate`;
+      }
+
+      function renderSession(s) {
+        const hourPct = Math.min(100, Math.round((s.hourlyUsed / s.hourlyCap) * 100));
+        const dayPct = Math.min(100, Math.round((s.dailyUsed / s.dailyCap) * 100));
+        const bh = s.businessHours || { enabled: false, startHour: 9, endHour: 20 };
+
+        return `
+        <div class="card mb-3 p-3" data-session-id="${s.sessionId}">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <div class="fw-bold">${s.sessionId}</div>
+              <div class="small text-muted">
+                ${s.isWarmingUp ? `<span class="badge bg-info text-dark">Warming up - day ${s.warmupDay}</span>` : `<span class="badge bg-success">Fully warmed up</span>`}
+              </div>
+            </div>
+            <div class="text-end ${healthClass(s.health.ratio)}">
+              <div class="fw-bold">${healthLabel(s.health.ratio)}</div>
+              <div class="small">${s.health.repliedCount} replied / ${s.health.sentCount} sent (7d)</div>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-2">
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between small">
+                <span>This hour</span><span>${s.hourlyUsed} / ${s.hourlyCap}</span>
+              </div>
+              <div class="progress" style="height: 8px">
+                <div class="progress-bar" style="width: ${hourPct}%"></div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between small">
+                <span>Today</span><span>${s.dailyUsed} / ${s.dailyCap}</span>
+              </div>
+              <div class="progress" style="height: 8px">
+                <div class="progress-bar bg-success" style="width: ${dayPct}%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Daily cap override</label>
+              <input type="number" class="form-control form-control-sm dailyCapInput" placeholder="auto (${s.dailyCap})" min="1" max="500">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Hourly cap override</label>
+              <input type="number" class="form-control form-control-sm hourlyCapInput" placeholder="auto (${s.hourlyCap})" min="1" max="100">
+            </div>
+            <div class="col-md-4">
+              <div class="form-check form-switch">
+                <input class="form-check-input bhEnabled" type="checkbox" ${bh.enabled ? "checked" : ""}>
+                <label class="form-check-label small">Business hours only</label>
+              </div>
+              <div class="d-flex gap-1">
+                <input type="number" class="form-control form-control-sm bhStart" value="${bh.startHour}" min="0" max="23" style="width: 70px">
+                <span class="small">to</span>
+                <input type="number" class="form-control form-control-sm bhEnd" value="${bh.endHour}" min="0" max="23" style="width: 70px">
+              </div>
+            </div>
+            <div class="col-md-2">
+              <button class="btn btn-sm btn-primary w-100 saveSettings">Save</button>
+            </div>
+          </div>
+        </div>
+      `;
+      }
+
+      function loadSessions() {
+        fetch("/api/safety")
+          .then((res) => res.json())
+          .then((sessions) => {
+            if (!sessions.length) {
+              $("#sessionsContainer").html('<div class="text-muted">No active sessions.</div>');
+              return;
+            }
+            $("#sessionsContainer").html(sessions.map(renderSession).join(""));
+          });
+      }
+
+      $(document).on("click", ".saveSettings", function () {
+        const card = $(this).closest(".card");
+        const sessionId = card.data("session-id");
+
+        const dailyVal = card.find(".dailyCapInput").val();
+        const hourlyVal = card.find(".hourlyCapInput").val();
+
+        const payload = {
+          dailyCapOverride: dailyVal ? Number(dailyVal) : null,
+          hourlyCapOverride: hourlyVal ? Number(hourlyVal) : null,
+          businessHours: {
+            enabled: card.find(".bhEnabled").is(":checked"),
+            startHour: Number(card.find(".bhStart").val()),
+            endHour: Number(card.find(".bhEnd").val()),
+          },
+        };
+
+        if (payload.dailyCapOverride > 500 || payload.hourlyCapOverride > 100) {
+          Swal.fire({
+            title: "High limit warning",
+            text: "This is well above the community-tested safe range and increases ban risk. Save anyway?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Save anyway",
+          }).then((result) => {
+            if (result.isConfirmed) saveSettings(sessionId, payload);
+          });
+          return;
+        }
+
+        saveSettings(sessionId, payload);
+      });
+
+      function saveSettings(sessionId, payload) {
+        fetch(`/api/safety/${sessionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then((res) => res.json())
+          .then(() => {
+            Swal.fire({ icon: "success", title: "Saved", toast: true, position: "top-end", showConfirmButton: false, timer: 2000 });
+            loadSessions();
+          });
+      }
+
+      loadSessions();
+      setInterval(loadSessions, 30000);
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

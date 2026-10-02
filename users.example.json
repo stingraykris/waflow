@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Admin",
+    "mobile": "3000000000",
+    "passHash": "$2a$10$TbSjCNeineZsIsaxYlVEq.kjH4CnNJvUQfutWdFXZ1cnKvNDQUhAC",
+    "country": "92",
+    "apiKey": "WF_replace_me_with_a_random_key",
+    "isAdmin": true
+  }
+]

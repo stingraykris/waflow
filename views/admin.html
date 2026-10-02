@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Admin</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="main-card p-4">
+          <div class="mb-4">
+            <h4 class="mb-0 text-muted fw-bold">Admin</h4>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-md-5">
+              <h6 class="fw-bold">New User</h6>
+              <div class="mb-2">
+                <input type="text" id="uName" class="form-control" placeholder="Name" />
+              </div>
+              <div class="mb-2">
+                <input type="text" id="uMobile" class="form-control" placeholder="Mobile (no + or spaces)" />
+              </div>
+              <div class="mb-2">
+                <input type="password" id="uPass" class="form-control" placeholder="Password" />
+              </div>
+              <div class="mb-2">
+                <input type="text" id="uCountry" class="form-control" placeholder="Country code (e.g. 92)" value="92" />
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="uAdmin" />
+                <label class="form-check-label" for="uAdmin">Grant admin</label>
+              </div>
+              <button id="createUser" class="btn btn-primary">
+                <i class="fa fa-user-plus me-1"></i> Create User
+              </button>
+            </div>
+            <div class="col-md-7">
+              <h6 class="fw-bold">Users</h6>
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Mobile</th>
+                    <th>Admin</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="userRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+      function loadUsers() {
+        fetch("/api/admin/users")
+          .then((res) => res.json())
+          .then((users) => {
+            const html = users
+              .map(
+                (u) => `
+              <tr>
+                <td>${u.name}</td>
+                <td>${u.mobile}</td>
+                <td>${u.isAdmin ? '<span class="badge bg-success">admin</span>' : ""}</td>
+                <td class="text-end">
+                  <button class="btn btn-sm btn-outline-secondary resetKey" data-mobile="${u.mobile}">
+                    <i class="fa fa-key"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger delUser" data-mobile="${u.mobile}">
+                    <i class="fa fa-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            `,
+              )
+              .join("");
+            $("#userRows").html(html);
+          });
+      }
+
+      $("#createUser").on("click", function () {
+        const name = $("#uName").val().trim();
+        const mobile = $("#uMobile").val().trim();
+        const pass = $("#uPass").val();
+        const country = $("#uCountry").val().trim();
+        const isAdmin = $("#uAdmin").is(":checked");
+
+        if (!name || !mobile || !pass) {
+          Swal.fire("Missing fields", "Name, mobile and password are required.", "warning");
+          return;
+        }
+
+        fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, mobile, pass, country, isAdmin }),
+        })
+          .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || "Failed");
+            $("#uName, #uMobile, #uPass").val("");
+            $("#uAdmin").prop("checked", false);
+            loadUsers();
+          })
+          .catch((err) => Swal.fire("Error", err.message, "error"));
+      });
+
+      $(document).on("click", ".delUser", function () {
+        const mobile = $(this).data("mobile");
+        Swal.fire({
+          title: "Delete user?",
+          text: mobile,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonColor: "#dc3545",
+        }).then((result) => {
+          if (!result.isConfirmed) return;
+          fetch(`/api/admin/users/${mobile}`, { method: "DELETE" })
+            .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok) throw new Error(data.error || "Failed");
+              loadUsers();
+            })
+            .catch((err) => Swal.fire("Error", err.message, "error"));
+        });
+      });
+
+      $(document).on("click", ".resetKey", function () {
+        const mobile = $(this).data("mobile");
+        fetch(`/api/admin/users/${mobile}/reset-api-key`, { method: "POST" })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.apiKey) {
+              Swal.fire("New API Key", data.apiKey, "success");
+            } else {
+              Swal.fire("Error", data.error || "Failed", "error");
+            }
+          });
+      });
+
+      loadUsers();
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

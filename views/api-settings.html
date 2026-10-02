@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: API Console</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+    <style>
+      .main-card {
+        max-width: 1000px;
+        margin: 20px auto;
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+      .api-key-box {
+        background: #fff;
+        border: 2px dashed #dee2e6;
+        font-family: monospace;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .api-key-box:hover {
+        border-color: var(--wa-primary);
+      }
+      .endpoint-badge {
+        background: #28a745;
+        color: #fff;
+        font-size: 0.7rem;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .param-table {
+        font-size: 0.8rem;
+        margin-bottom: 0;
+      }
+      .param-table code {
+        color: #e83e8c;
+        background: #f8f9fa;
+        padding: 2px 4px;
+      }
+      pre {
+        background: #1e2b28 !important;
+        color: #d7fff0;
+        padding: 15px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        position: relative;
+      }
+      .sidebar-item {
+        border-bottom: 1px solid #eee;
+        padding: 10px 0;
+      }
+      .sidebar-item:last-child {
+        border: none;
+      }
+    </style>
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="card main-card">
+        <div class="card-body p-0">
+          <div class="row g-0">
+            <div class="col-lg-4 bg-light p-4 border-end">
+              <div class="mb-4">
+                <h4 class="mb-0 text-muted fw-bold">API Settings</h4>
+                <small class="text-muted">API Settings &amp; Docs</small>
+              </div>
+
+              <div class="sidebar-item">
+                <label class="small text-muted fw-bold uppercase"
+                  >Connected User</label
+                >
+                <div class="d-flex align-items-center mt-1">
+                  <i class="fas fa-user-circle text-primary me-2 fs-4"></i>
+                  <div>
+                    <div class="fw-bold"><%= name %></div>
+                    <div class="small text-muted"><%= mobile %></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sidebar-item mt-3">
+                <label class="small text-muted fw-bold d-block mb-2"
+                  >REST API KEY</label
+                >
+                <div
+                  id="apiKey"
+                  title="Click to copy API key"
+                  class="api-key-box p-3 text-center rounded text-success fw-bold mb-2"
+                  onclick="copyText('<%= apiKey %>')"
+                >
+                  <%= apiKey %>
+                </div>
+                <button
+                  onclick="resetKey()"
+                  class="btn btn-sm btn-outline-danger w-100 mt-2"
+                >
+                  <i class="fas fa-sync-alt me-1"></i> Regenerate Key
+                </button>
+              </div>
+              <div class="sidebar-item">
+<div class="alert alert-secondary py-2 px-3 small border-0 d-flex align-items-center mb-2">
+        <i class="fas fa-user-shield me-2 text-primary"></i>
+        <span><strong>IP Whitelist Required:</strong> Only authorized server IPs can trigger this API. Contact support to add a new IP.</span>
+    </div>
+       
+                <p class="text-muted mt-2 mb-0" style="font-size: 0.7rem">
+                  Note: API calls from unauthorized IPs will return
+                  <code>403 Forbidden</code>.
+                </p>
+              </div>
+            </div>
+
+            <div class="col-lg-8 p-4">
+              <h6 class="fw-bold mb-3">
+                <i class="fas fa-terminal me-2 text-info"></i>API Documentation
+              </h6>
+
+              <div class="d-flex align-items-center mb-2">
+                <span class="endpoint-badge me-2">POST</span>
+                <span class="fw-bold">Send Notification Message</span>
+              </div>
+              <div
+                class="api-key-box bg-white border p-2 rounded mb-3"
+                title="Click to copy endpoint"
+                onclick="copyText('<%= host %>/send-message')"
+              >
+                <code id="apiUrl" class="text-dark small"
+                  ><%= host %>/send-message</code
+                >
+              </div>
+              <div class="table-responsive mb-4">
+                <table class="table table-sm table-hover border param-table">
+                  <thead class="bg-light">
+                    <tr>
+                      <th>Key</th>
+                      <th>Type</th>
+                      <th>Required</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code>api_key</code></td>
+                      <td>String</td>
+                      <td>Yes</td>
+                      <td>Pass in Header (<code>x-api-key</code>) or Body</td>
+                    </tr>
+                    <tr>
+                      <td><code>sessionId</code></td>
+                      <td>String</td>
+                      <td>Yes</td>
+                      <td>The unique <b>Session ID</b> of your WA instance</td>
+                    </tr>
+                    <tr>
+                      <td><code>phone</code></td>
+                      <td>String</td>
+                      <td>Yes</td>
+                      <td>Phone with country code (e.g. 923...)</td>
+                    </tr>
+                    <tr>
+                      <td><code>msg</code></td>
+                      <td>String</td>
+                      <td>Yes</td>
+                      <td>Message Text content</td>
+                    </tr>
+                    <tr>
+                      <td><code>delay</code></td>
+                      <td>Integer</td>
+                      <td>No</td>
+                      <td>Custom delay in ms (Default: 5000)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <label class="small fw-bold text-muted uppercase"
+                >JSON Payload
+              </label>
+              <div class="position-relative">
+                <pre><code>curl -X POST <%= host %>/send-message
+-H "x-api-key: <%= apiKey %>"
+-H "Content-Type: application/json"
+-d '{
+  "sessionId": "923001234567", "number": "923001234567",
+  "msg": "Hello! Your account balance is updated.", "delay": 3000
+}'</code></pre>
+              </div>
+
+              <div class="alert alert-warning mt-3 py-2 small border-0">
+                <i class="fas fa-exclamation-triangle me-1"></i> Note: bulk API
+                hits are processed via Global Queue to prevent WhatsApp bans.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+      function copyText(text) {
+        navigator.clipboard.writeText(text);
+        Swal.fire({
+          title: "Copied!",
+          toast: true,
+          position: "top-end",
+          timer: 1500,
+          showConfirmButton: false,
+          icon: "success",
+        });
+      }
+
+      async function resetKey() {
+        const result = await Swal.fire({
+          title: "Rotate Key?",
+          text: "This will disconnect current API integrations.",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "Yes, Rotate",
+          position: "top",
+        });
+
+        if (result.isConfirmed) {
+          const res = await fetch("/reset-api-key", { method: "POST" });
+          const data = await res.json();
+          if (data.apiKey) {
+            document.getElementById("apiKey").innerText = data.apiKey;
+
+            Swal.fire({
+              icon: "success",
+              title: "API Key Updated",
+              timer: 1500,
+              showConfirmButton: false,
+            });
+          }
+        }
+      }
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

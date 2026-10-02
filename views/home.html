@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>WAFLOW :: Home</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23128C7E'/%3E%3Cpath d='M32 14c-9.9 0-18 8.1-18 18 0 3.5 1 6.8 2.7 9.6L14 50l8.7-2.6c2.6 1.5 5.7 2.4 9.3 2.4 9.9 0 18-8.1 18-18s-8.1-17.8-18-17.8z' fill='%2325D366'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body class="app-page">
+    <div id="app-nav"></div>
+    <div class="page-content">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-12 main-card p-4">
+          <div class="text-start mb-2">
+            <h4 class="mb-0 text-muted fw-bold">Send a Message</h4>
+            <span id="session-id" class="badge bg-light text-success border mt-2"
+              >Connecting session...</span
+            >
+          </div>
+          <div class="row g-4">
+            <div class="col-lg-5 border-end-lg">
+              <div class="mb-3">
+                <label class="form-label fw-bold">Receiver Number List</label>
+                <p class="text-muted small mb-1">
+                  Enter numbers manually or upload a CSV file.
+                </p>
+                <textarea
+                  name="phone"
+                  id="phone"
+                  class="form-control"
+                  rows="12"
+                  placeholder="Ex: 923001234567&#10;923007654321"
+                ></textarea>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <label
+                    for="csvFile"
+                    class="form-label small fw-bold text-primary mb-0"
+                    >Upload CSV File</label
+                  >
+                  <button
+                    type="button"
+                    id="saveCsvBtn"
+                    class="btn btn-sm btn-outline-secondary"
+                  >
+                    <i class="fa fa-bookmark"></i> Save for later
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  id="csvFile"
+                  class="form-control form-control-sm"
+                  accept=".csv"
+                />
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small fw-bold d-block"
+                  >Saved CSVs</label
+                >
+                <div id="csvLibraryList" class="small"></div>
+              </div>
+            </div>
+
+            <div class="col-lg-7" style="margin-top: -45px">
+              <div id="NewSessionForm">
+                <div id="csvColumns" class="mb-3 bg-light rounded d-none">
+                  <label class="small fw-bold d-block mb-1"
+                    >Click to insert variables:</label
+                  >
+                  <div id="variableList" class="d-flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <label for="message" class="form-label fw-bold"
+                      >Message Content</label
+                    >
+                    <select id="templateSelect" class="form-select form-select-sm w-auto">
+                      <option value="">Load template…</option>
+                    </select>
+                  </div>
+                  <textarea
+                    class="form-control"
+                    id="message"
+                    name="message"
+                    rows="8"
+                    placeholder="Type your message here..."
+                  ></textarea>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="image" class="form-label fw-bold"
+                      >Attachment (Optional)</label
+                    >
+                    <input
+                      type="file"
+                      class="form-control"
+                      id="image"
+                      name="image"
+                    />
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="delay" class="form-label fw-bold"
+                      >Delay (ms)</label
+                    >
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="delay"
+                      name="delay"
+                      value="5000"
+                    />
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label for="scheduleAt" class="form-label fw-bold"
+                    >Schedule for later (optional)</label
+                  >
+                  <input
+                    type="datetime-local"
+                    class="form-control"
+                    id="scheduleAt"
+                    name="scheduleAt"
+                  />
+                  <div class="form-text">Leave empty to send immediately.</div>
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                  <button
+                    id="SendMessage"
+                    class="btn btn-success btn-lg shadow-sm"
+                  >
+                    <i class="fa fa-paper-plane me-2"></i> Send Message
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+      var socket = io();
+
+      socket.on("session-id", function (id) {
+        $("#session-id").text("Active Session: " + id);
+      });
+
+      // Send Message Logic
+      $("#SendMessage").on("click", function () {
+        const phone = $("#phone").val().trim();
+        const msg = $("#message").val().trim();
+        const fileInput = $("#csvFile")[0];
+        const csvFile = fileInput.files[0];
+        const imageInput = $("#image");
+
+        // 1. Validation check
+        const hasReceiver = phone !== "" || fileInput.files.length > 0;
+        const hasMessage = msg !== "" || $("#image")[0].files.length > 0;
+        if (!hasReceiver || !hasMessage) {
+          Swal.fire({
+            icon: "error",
+            title: "Missing Information",
+            text: "Please provide a receiver (Phone list or CSV) and either a message or an attachment.",
+            position: "top",
+          });
+          return;
+        }
+
+        // 2. Confirmation before sending
+        Swal.fire({
+          title: "Confirm Broadcast?",
+          text: "Are you sure you want to start sending these messages?",
+          icon: "question",
+          showCancelButton: true,
+          confirmButtonColor: "#198754",
+          cancelButtonColor: "#6c757d",
+          confirmButtonText: "Yes, send it!",
+          position: "top",
+        }).then((result) => {
+          if (result.isConfirmed) {
+            const btn = $(this);
+            const imageInput = document.getElementById("image");
+            btn
+              .prop("disabled", true)
+              .html(
+                '<span class="spinner-border spinner-border-sm me-2"></span>Sending...',
+              );
+
+            const sessionId = $("#session-id")
+              .text()
+              .replace("Active Session: ", "")
+              .trim();
+
+            // 🔥 CASE 1: CSV → REST API
+            if (csvFile) {
+              const formData = new FormData();
+
+              formData.append("file", csvFile);
+              formData.append("msg", msg);
+              formData.append("delay", $("#delay").val().trim());
+              formData.append("sessionId", sessionId);
+              const scheduleAt = $("#scheduleAt").val();
+              if (scheduleAt) formData.append("scheduleAt", scheduleAt);
+
+              // optional image support
+              if (imageInput.files.length > 0) {
+                formData.append("image", imageInput.files[0]);
+              }
+
+              fetch("/send-csv", {
+                method: "POST",
+                body: formData,
+              })
+                .then((res) => res.json())
+                .then((data) => {
+                  btn
+                    .prop("disabled", false)
+                    .html(
+                      '<i class="fa fa-paper-plane me-2"></i> Send Message',
+                    );
+
+                  if (data.status === "queued") {
+                    Swal.fire({
+                      icon: "success",
+                      title: "CSV Queued!",
+                      text: `Message queued: ${data.count}`,
+                      position: "top",
+                    });
+                  } else {
+                    throw new Error(data.error || "Failed");
+                  }
+                })
+                .catch((err) => {
+                  btn
+                    .prop("disabled", false)
+                    .html(
+                      '<i class="fa fa-paper-plane me-2"></i> Send Message',
+                    );
+
+                  Swal.fire({
+                    icon: "error",
+                    title: "CSV Upload Failed",
+                    text: err.message,
+                  });
+                });
+
+              return; // ⛔ IMPORTANT → stop socket flow
+            }
+
+            // 🔥 CASE 2: Manual numbers → SOCKET (existing)
+            socket.emit(
+              "SendMsg",
+              {
+                phone: phone,
+                msg: msg,
+                delay: $("#delay").val().trim(),
+                scheduleAt: $("#scheduleAt").val() || null,
+                cid: sessionId,
+                filename:
+                  imageInput.files.length > 0 ? imageInput.files[0].name : null,
+                image: imageInput.files.length > 0 ? imageInput.files[0] : null,
+              },
+              (status) => {
+                btn
+                  .prop("disabled", false)
+                  .html('<i class="fa fa-paper-plane me-2"></i> Send Message');
+
+                if (status.message === "queued") {
+                  Swal.fire({
+                    icon: "success",
+                    title: "Broadcast Queued!",
+                    text: "Messages added to queue",
+                    position: "top",
+                    timer: 3000,
+                    showConfirmButton: false,
+                  });
+                } else {
+                  Swal.fire({
+                    icon: "error",
+                    title: "Failed",
+                    text:
+                      "Could not start: " +
+                      (status.message || JSON.stringify(status)),
+                  });
+                }
+              },
+            );
+
+            // const btn = $(this);
+            // const fileInput = document.getElementById("image");
+
+            // btn
+            //   .prop("disabled", true)
+            //   .html(
+            //     '<span class="spinner-border spinner-border-sm me-2"></span>Sending...',
+            //   );
+
+            // socket.emit(
+            //   "SendMsg",
+            //   {
+            //     phone: phone,
+            //     msg: msg,
+            //     delay: $("#delay").val().trim(),
+            //     cid: $("#session-id")
+            //       .text()
+            //       .replace("Active Session: ", "")
+            //       .trim(),
+            //     filename:
+            //       fileInput.files.length > 0 ? fileInput.files[0].name : null,
+            //     image: fileInput.files.length > 0 ? fileInput.files[0] : null,
+            //     hasCSV: fileInput.files.length > 0,
+            //   },
+            //   (status) => {
+            //     btn
+            //       .prop("disabled", false)
+            //       .html('<i class="fa fa-paper-plane me-2"></i> Send Message');
+
+            //     // 3. Status Feedback
+            //     if (status.message === "queued") {
+            //       Swal.fire({
+            //         icon: "success",
+            //         title: "Broadcast Queued!",
+            //         text: "Your broadcast has been successfully added to the queue.",
+            //         position: "top",
+            //         timer: 3000,
+            //         showConfirmButton: false,
+            //       });
+            //     } else {
+            //       Swal.fire({
+            //         icon: "error",
+            //         title: "Failed",
+            //         text:
+            //           "Could not start: " +
+            //           (status.message || JSON.stringify(status)),
+            //         position: "top",
+            //       });
+            //     }
+            //   },
+            // );
+          }
+        });
+      });
+
+      // CSV Logic
+      // Updated CSV Logic for home.html
+      $("#csvFile").on("change", function (e) {
+        const file = e.target.files[0];
+        if (!file) {
+          $("#phone").prop("disabled", false).removeClass("bg-light");
+          $("#phone")
+            .prop("disabled", false)
+            .attr("placeholder", "Ex: 923001234567...");
+          $("#csvColumns").addClass("d-none");
+          $("#variableList").empty();
+          return;
+        }
+
+        $("#phone").prop("disabled", true).addClass("bg-light");
+        $("#phone")
+          .val("")
+          .prop("disabled", true)
+          .attr("placeholder", "CSV Uploaded - Manual input disabled");
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const text = event.target.result;
+          const rows = text
+            .split("\n")
+            .map((r) => r.trim())
+            .filter((r) => r.length)
+            .map((r) => r.split(","));
+
+          if (rows.length > 0) {
+            const headers = rows[0].map((h) => h.trim());
+            renderCSVColumns(headers);
+
+            // Notification for CSV success
+            Swal.fire({
+              icon: "success",
+              title: "CSV Loaded",
+              text: `Found ${headers.length} columns. Variables are ready!`,
+              toast: true,
+              position: "top-end",
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // $("#csvFile").on("change", function (e) {
+      //   const file = e.target.files[0];
+
+      //   // If no file is selected (user cancelled or cleared the input)
+      //   if (!file) {
+      //     $("#phone").prop("disabled", false).removeClass("bg-light");
+      //     $("#csvColumns").addClass("d-none"); // Hide the variables section
+      //     $("#variableList").empty(); // Clear the previous buttons
+      //     return;
+      //   }
+
+      //   // Existing logic for processing the file
+      //   $("#phone").prop("disabled", true).addClass("bg-light");
+      //   const reader = new FileReader();
+      //   reader.onload = function (event) {
+      //     const text = event.target.result;
+      //     const rows = text
+      //       .split("\n")
+      //       .map((r) => r.trim())
+      //       .filter((r) => r.length)
+      //       .map((r) => r.split(","));
+
+      //     if (rows.length > 0) {
+      //       const headers = rows[0].map((h) => h.trim());
+      //       renderCSVColumns(headers);
+      //     }
+      //   };
+      //   reader.readAsText(file);
+      // });
+
+      // Update render function to ensure it stays hidden if no valid variables exist
+      function renderCSVColumns(headers) {
+        const filtered = headers.filter(
+          (h) => !h.toLowerCase().startsWith("phone"),
+        );
+        const html = filtered
+          .map(
+            (h) =>
+              `<span class="badge bg-primary variable-badge p-2 mt-1 insert-var" data-key="${h}">{${h}}</span>`,
+          )
+          .join("");
+
+        if (html) {
+          $("#csvColumns").removeClass("d-none");
+          $("#variableList").html(html);
+        } else {
+          $("#csvColumns").addClass("d-none");
+          $("#variableList").empty();
+        }
+      }
+
+      $(document).on("click", ".insert-var", function () {
+        const key = $(this).data("key");
+        const textArea = document.getElementById("message");
+        const insertText = `{${key}}`;
+        const start = textArea.selectionStart || 0;
+        const end = textArea.selectionEnd || 0;
+        textArea.value =
+          textArea.value.substring(0, start) +
+          insertText +
+          textArea.value.substring(end);
+        textArea.focus();
+      });
+
+      $("#phone").on("input", function () {
+        $("#csvFile").prop("disabled", $(this).val().trim().length > 0);
+      });
+
+      // Templates
+      fetch("/api/templates")
+        .then((res) => res.json())
+        .then((templates) => {
+          const $sel = $("#templateSelect");
+          templates.forEach((t) => {
+            $sel.append(
+              `<option value="${t.id}" data-body="${encodeURIComponent(t.body)}">${t.name}</option>`,
+            );
+          });
+        })
+        .catch(() => {});
+
+      $("#templateSelect").on("change", function () {
+        const body = $(this).find(":selected").data("body");
+        if (body) $("#message").val(decodeURIComponent(body));
+      });
+
+      // CSV library: save the currently-selected CSV for reuse later
+      $("#saveCsvBtn").on("click", function () {
+        const file = $("#csvFile")[0].files[0];
+        if (!file) {
+          Swal.fire("No file selected", "Choose a CSV file first.", "warning");
+          return;
+        }
+        Swal.fire({
+          title: "Name this CSV",
+          input: "text",
+          inputValue: file.name.replace(/\.csv$/i, ""),
+          showCancelButton: true,
+          confirmButtonText: "Save",
+        }).then((result) => {
+          if (!result.isConfirmed) return;
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("name", result.value || file.name);
+          fetch("/api/csv-library", { method: "POST", body: formData })
+            .then((res) => res.json())
+            .then(() => {
+              Swal.fire("Saved", "CSV saved for later use.", "success");
+              loadCsvLibrary();
+            });
+        });
+      });
+
+      function loadCsvLibrary() {
+        fetch("/api/csv-library")
+          .then((res) => res.json())
+          .then((files) => {
+            if (!files.length) {
+              $("#csvLibraryList").html('<div class="text-muted">No saved CSVs.</div>');
+              return;
+            }
+            const html = files
+              .map(
+                (f) => `
+              <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
+                <div>
+                  <div class="fw-bold">${f.name}</div>
+                  <div class="text-muted" style="font-size: 0.75rem">${f.rowCount} rows</div>
+                </div>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-sm btn-outline-success sendCsvLib" data-id="${f.id}"><i class="fa fa-paper-plane"></i></button>
+                  <button class="btn btn-sm btn-outline-danger delCsvLib" data-id="${f.id}"><i class="fa fa-trash"></i></button>
+                </div>
+              </div>
+            `,
+              )
+              .join("");
+            $("#csvLibraryList").html(html);
+          });
+      }
+
+      $(document).on("click", ".delCsvLib", function () {
+        fetch(`/api/csv-library/${$(this).data("id")}`, { method: "DELETE" }).then(() => loadCsvLibrary());
+      });
+
+      $(document).on("click", ".sendCsvLib", function () {
+        const id = $(this).data("id");
+        const sessionId = $("#session-id").text().replace("Active Session: ", "").trim();
+        const msg = $("#message").val().trim();
+
+        if (!msg) {
+          Swal.fire("Missing message", "Type or load a message first (used to send this CSV).", "warning");
+          return;
+        }
+
+        Swal.fire({
+          title: "Send saved CSV?",
+          text: "This will queue messages to every number in this CSV using the current message.",
+          icon: "question",
+          showCancelButton: true,
+          confirmButtonText: "Send",
+        }).then((result) => {
+          if (!result.isConfirmed) return;
+          fetch(`/api/csv-library/${id}/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId,
+              msg,
+              delay: $("#delay").val().trim(),
+              scheduleAt: $("#scheduleAt").val() || null,
+            }),
+          })
+            .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok) throw new Error(data.error || "Failed");
+              Swal.fire("Queued", `Queued ${data.count} message(s).`, "success");
+            })
+            .catch((err) => Swal.fire("Error", err.message, "error"));
+        });
+      });
+
+      loadCsvLibrary();
+    </script>
+    <script src="js/nav.js"></script>
+  </body>
+</html>

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAFLOW :: Sessions</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-11 col-sm-10 col-md-9 col-lg-8 session-card">
+          <div class="row g-0">
+            <div
+              id="qrcode"
+              class="col-md-6 d-none d-md-flex align-items-center justify-content-center bg-light p-5"
+            >
+              <img
+                src="https://colorlib.com/etc/lf/Login_v1/images/img-01.png"
+                alt="IMG"
+                class="img-fluid js-tilt"
+                style="max-width: 200px"
+              />
+            </div>
+
+            <div class="col-md-6 p-4 p-lg-5">
+              <div class="text-center mb-4">
+                <h2 class="mb-0">
+                  <span class="wa-text">WA</span
+                  ><span class="flow-text">FLOW</span>
+                </h2>
+                <p class="text-muted small">Manage your active sessions</p>
+              </div>
+
+              <div id="sessionform">
+                <div class="session-list-container">
+                  <ul class="list-group list-group-flush mb-3">
+                    <% if (session_list.length === 0) { %>
+                    <li class="list-group-item text-center text-muted small">
+                      No sessions found
+                    </li>
+                    <% } else { %> <% for (let i = 0; i < session_list.length;
+                    i++) { %>
+                    <li
+                      class="list-group-item d-flex justify-content-between align-items-center"
+                    >
+                      <span class="small fw-bold">
+                        <%= session_list[i].id %>
+                      </span>
+
+                      <div class="d-flex gap-2">
+                        <button
+                          class="btn btn-outline-success btn-sm JoinSession"
+                          data-session-id="<%= session_list[i].sessionId %>"
+                        >
+                          Join
+                        </button>
+
+                        <button
+                          class="btn btn-outline-danger btn-sm DeleteSession"
+                          data-session-id="<%= session_list[i].sessionId %>"
+                        >
+                          <i class="fa fa-times"></i>
+                        </button>
+                      </div>
+                    </li>
+                    <% } %> <% } %>
+                  </ul>
+                </div>
+
+                <div class="mb-3">
+                  <div class="input-group">
+                    <span class="input-group-text bg-transparent border-end-0"
+                      ><i class="fa fa-mobile text-muted"></i
+                    ></span>
+                    <input
+                      type="text"
+                      name="SessionName"
+                      class="form-control border-start-0"
+                      placeholder="Session Name"
+                    />
+                  </div>
+                </div>
+
+                <div class="d-grid mb-3">
+                  <button
+                    id="CreateNewSession"
+                    class="btn btn-primary shadow-sm"
+                  >
+                    Create New Session
+                  </button>
+                </div>
+              </div>
+
+              <div class="text-center mt-4">
+                <a href="logout" class="text-danger text-decoration-none small">
+                  Logout <i class="fa fa-sign-out-alt ms-1"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+      var socket = io();
+
+      // 1. Create Session with Feedback
+      $("#CreateNewSession").on("click", function () {
+        const btn = $(this);
+        const Sessionid = $("input[name=SessionName]").val().trim();
+
+        if (!Sessionid || Sessionid.length < 3) {
+          Swal.fire(
+            "Invalid Name",
+            "Session name must be at least 3 characters.",
+            "warning",
+          );
+          return;
+        }
+
+        btn.prop("disabled", true);
+        $("#sessionform").html(`
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <p>Generating session...</p>
+        </div>
+    `);
+
+        socket.emit("createSession", { id: Sessionid }, (response) => {
+          setTimeout(() => btn.prop("disabled", false), 3000);
+          if (response.status !== "success") {
+            Swal.fire(
+              "Error",
+              response.message || "Failed to create session",
+              "error",
+            ).then(() => location.reload());
+          }
+        });
+      });
+
+      // 2. Delete Session with Confirmation
+      $(document).on("click", ".DeleteSession", function () {
+        const sessionId = $(this).data("session-id");
+        if (!sessionId) return;
+
+        Swal.fire({
+          title: "Are you sure?",
+          text: "This will logout your WhatsApp and remove the session!",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonColor: "#dc3545",
+          cancelButtonColor: "#6c757d",
+          confirmButtonText: "Yes, delete it!",
+        }).then((result) => {
+          if (result.isConfirmed) {
+            const btn = $(this);
+            btn
+              .prop("disabled", true)
+              .html('<i class="fa fa-spinner fa-spin"></i>');
+
+            socket.emit("deleteSession", { sessionId }, function (res) {
+              if (!res || res.status !== "deleted") {
+                Swal.fire(
+                  "Failed",
+                  res ? res.status : "Server not responding",
+                  "error",
+                );
+                btn.prop("disabled", false).html('<i class="fa fa-times"></i>');
+              } else {
+                Swal.fire(
+                  "Deleted!",
+                  "Session has been removed.",
+                  "success",
+                ).then(() => location.reload());
+              }
+            });
+          }
+        });
+      });
+
+      // 3. Join Session Status
+      $(document).on("click", ".JoinSession", function () {
+        const sessionId = $(this).data("session-id");
+        if (!sessionId) return;
+
+        $("#sessionform").html(`
+        <div class="text-center py-5">
+            <div class="spinner-border text-success mb-3" role="status"></div>
+            <p>Connecting to WhatsApp...</p>
+        </div>
+    `);
+
+        socket.emit("joinSession", { sessionId }, function (res) {
+          if (!res) {
+            Swal.fire("Error", "Server not responding", "error").then(() =>
+              location.reload(),
+            );
+            return;
+          }
+          if (res.status === "ready") {
+            window.location.href = "/";
+          } else {
+            $("#sessionform").html(
+              `<p class='text-center'>Status: ${res.status}</p>`,
+            );
+          }
+        });
+      });
+
+      // 4. QR Code Alert
+      socket.on("qr", function (qr) {
+        $("#qrcode").empty();
+        $("#sessionform").empty();
+        // Render QR in the left pane
+        jQuery("#qrcode").qrcode({
+          render: "canvas",
+          width: 200,
+          height: 200,
+          text: qr,
+        });
+
+        Swal.fire({
+          title: "QR Code Generated",
+          text: "Please scan the code with your phone.",
+          icon: "info",
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 3000,
+        });
+
+        $("#sessionform").append(`
+        <div class="text-center">
+            <h5 class="fw-bold">Scan QR Code</h5>
+            <p class="small text-muted">Open WhatsApp and scan the code to link.</p>
+            <button class="btn btn-sm btn-outline-secondary mt-3" onclick="location.reload()">Cancel</button>
+        </div>
+    `);
+      });   
+      socket.on("ready", function (data) {
+        location.reload();
+      });
+    </script>
+  </body>
+</html>
